@@ -1,0 +1,544 @@
+// GraphOnly.tsx - Matching original UI with optimized rendering
+import React, { useRef, useEffect, useState, useCallback } from 'react';
+import * as d3 from 'd3';
+import { useLocation } from 'react-router-dom';
+import * as js from '../services/jobService.js';
+import * as api from '../services/api.js';
+import { D3Link, D3Node, RunHistoryEntry } from '../types/models.js';
+import { createHierarchy } from '../utils/hierarchy.js';
+import DetailTabs from './DetailTabs.js';
+import PageHeader from './PageHeader.js';
+import NodeDetail from './NodeDetail.js';
+import axios from 'axios';
+
+const GraphOnly = ({ width = window.innerWidth, height = window.innerHeight }) => {
+  // State variables from original code
+  const [appName, setAppName] = useState('COGS');
+  const [displayName, setDisplayName] = useState('COGS');
+  const [isSimulationRunning, setIsSimulationRunning] = useState(true);
+  const [data, setData] = useState(null);
+  const [nodes, setNodes] = useState([]);
+  const [links, setLinks] = useState([]);
+  const [selectedNode, setSelectedNode] = useState(null);
+  const [allDisplayedNodes, setAllDisplayedNodes] = useState([]);
+  const [handleNodeClickRef, setHandleNodeClickRef] = useState(null);
+  const [componentOptions, setComponentOptions] = useState(null);
+  const [showOverlay, setShowOverlay] = useState(false);
+  const [overlayNode, setOverlayNode] = useState(null);
+  const [timeRange, setTimeRange] = useState(0);
+  const [updated, setUpdated] = useState(false);
+  const [idNameMap, setIdNameMap] = useState(null);
+  const [eventSource, setEventSource] = useState(null);
+  const [user, setUser] = useState('');
+  const [password, setPassword] = useState('');
+  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
+  
+  // Refs
+  const canvasRef = useRef(null);
+  const svgRef = useRef(null);
+  const mainCanvasRef = useRef(null);
+  const nodesRef = useRef([]);
+  const linksRef = useRef([]);
+  const simulationRef = useRef(null);
+  const location = useLocation();
+  
+  // Status symbols - same as original
+  const statusSymbols = {
+    Success: { symbol: "✓", color: "green" },
+    Failure: { symbol: "✗", color: "red" },
+    Running: { symbol: "▶", color: "blue" },
+    Waiting: { symbol: "⏳", color: "blue" },
+    On_Ice: { symbol: "❄", color: "orange" },
+    _: { symbol: "□", color: "gray" },
+  };
+  
+  // Load user credentials
+  useEffect(() => {
+    if (location.state?.user && location.state?.password) {
+      setUser(location.state.user);
+      setPassword(location.state.password);
+    } else {
+      console.error("User or password not provided in navigation state");
+    }
+  }, [location.state]);
+  
+  // API sync - same as original
+  useEffect(() => {
+    const handleSync = async (appName) => {
+      if (!user || !password) return;
+      
+      try {
+        await axios.post(`/api/service/sync?appId=${appName}`, {
+          enabled: true
+        }, {
+          headers: { user, password }
+        });
+      } catch (error) {
+        console.error("Error syncing:", error);
+      }
+    };
+    
+    if (user && password && appName) {
+      handleSync(appName);
+    }
+  }, [appName, user, password]);
+  
+  // Fetch job data - same as original
+  useEffect(() => {
+    const fetchJobs = async () => {
+      if (!appName || !user || !password) return;
+      
+      try {
+        const jobs = await api.fetchJobs(appName, user, password);
+        setData(jobs);
+      } catch (error) {
+        console.error("Error fetching jobs:", error);
+      }
+    };
+    
+    fetchJobs();
+  }, [appName, user, password]);
+  
+  // Process data
+  useEffect(() => {
+    if (!data) return;
+    
+    try {
+      const { idNameMap, nodes: newNodes, links: newLinks, componentTypes } = createHierarchy(data, true);
+      
+      // Initialize node positions
+      newNodes.forEach(node => {
+        node.x = Math.random() * width;
+        node.y = Math.random() * height;
+        node.radius = 5;
+        node.color = statusSymbols[node.status]?.color || statusSymbols._.color;
+      });
+      
+      // Update refs and state
+      nodesRef.current = newNodes;
+      linksRef.current = newLinks;
+      setNodes(newNodes);
+      setLinks(newLinks);
+      setComponentOptions(componentTypes);
+      setIdNameMap(idNameMap);
+      
+      // Start simulation
+      startForceSimulation(newNodes, newLinks);
+      
+    } catch (error) {
+      console.error("Error processing graph data:", error);
+    }
+  }, [data, width, height]);
+  
+  // Canvas setup and rendering
+  useEffect(() => {
+    const canvas = canvasRef.current;
+    if (!canvas || nodes.length === 0) return;
+    
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Set up canvas with proper pixel ratio
+    const pixelRatio = window.devicePixelRatio || 1;
+    canvas.width = width * pixelRatio;
+    canvas.height = height * pixelRatio;
+    canvas.style.width = `${width}px`;
+    canvas.style.height = `${height}px`;
+    ctx.scale(pixelRatio, pixelRatio);
+    
+    // Render function
+    const renderCanvas = () => {
+      ctx.clearRect(0, 0, canvas.width / pixelRatio, canvas.height / pixelRatio);
+      
+      // Apply transform
+      ctx.save();
+      ctx.translate(transform.x, transform.y);
+      ctx.scale(transform.k, transform.k);
+      
+      // Draw links
+      ctx.strokeStyle = '#ccc';
+      ctx.lineWidth = 0.5;
+      ctx.beginPath();
+      
+      links.forEach(link => {
+        const source = link.source;
+        const target = link.target;
+        
+        if (source.x && source.y && target.x && target.y) {
+          ctx.moveTo(source.x, source.y);
+          ctx.lineTo(target.x, target.y);
+        }
+      });
+      
+      ctx.stroke();
+      
+      // Draw nodes
+      nodes.forEach(node => {
+        if (!node.x || !node.y) return;
+        
+        // Draw node circle
+        ctx.beginPath();
+        ctx.arc(node.x, node.y, node.radius || 5, 0, Math.PI * 2);
+        ctx.fillStyle = node.color || '#999';
+        ctx.fill();
+        
+        // Highlight selected node
+        if (selectedNode && node.id === selectedNode.id) {
+          ctx.strokeStyle = '#ff6600';
+          ctx.lineWidth = 2 / transform.k;
+          ctx.stroke();
+        }
+      });
+      
+      ctx.restore();
+    };
+    
+    // Initial render
+    renderCanvas();
+    
+    // Set up zoom behavior
+    const zoom = d3.zoom()
+      .scaleExtent([0.1, 10])
+      .on('zoom', (event) => {
+        setTransform(event.transform);
+        renderCanvas();
+      });
+    
+    // Apply zoom to SVG (which sits on top of canvas)
+    d3.select(svgRef.current).call(zoom);
+    
+    return () => {
+      // Cleanup
+      if (simulationRef.current) {
+        simulationRef.current.stop();
+      }
+    };
+  }, [nodes, links, selectedNode, transform, width, height]);
+  
+  // Force simulation
+  const startForceSimulation = (nodes, links) => {
+    setIsSimulationRunning(true);
+    
+    const simulation = d3.forceSimulation(nodes)
+      .force("link", d3.forceLink(links).id(d => d.id).distance(30))
+      .force("charge", d3.forceManyBody().strength(-50))
+      .force("center", d3.forceCenter(width / 2, height / 2))
+      .force("collide", d3.forceCollide(10))
+      .alphaDecay(0.01) // Slower decay for better layout
+      .on("tick", () => {
+        // Update canvas on every few ticks for efficiency
+        if (Math.random() < 0.1) { // Only update 10% of ticks
+          if (canvasRef.current) {
+            const ctx = canvasRef.current.getContext('2d');
+            if (ctx) {
+              renderCanvas(ctx);
+            }
+          }
+        }
+      })
+      .on("end", () => {
+        setIsSimulationRunning(false);
+        console.log("Force simulation completed");
+        
+        // Final render
+        if (canvasRef.current) {
+          const ctx = canvasRef.current.getContext('2d');
+          if (ctx) {
+            renderCanvas(ctx);
+          }
+        }
+      });
+    
+    simulationRef.current = simulation;
+  };
+  
+  // Canvas render function
+  const renderCanvas = (providedCtx) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return;
+    
+    const ctx = providedCtx || canvas.getContext('2d');
+    if (!ctx) return;
+    
+    // Clear and setup
+    const pixelRatio = window.devicePixelRatio || 1;
+    ctx.clearRect(0, 0, canvas.width / pixelRatio, canvas.height / pixelRatio);
+    
+    // Apply transform
+    ctx.save();
+    ctx.translate(transform.x, transform.y);
+    ctx.scale(transform.k, transform.k);
+    
+    // Draw links
+    ctx.strokeStyle = '#ccc';
+    ctx.lineWidth = 0.5;
+    ctx.beginPath();
+    
+    links.forEach(link => {
+      const source = link.source;
+      const target = link.target;
+      
+      if (source.x && source.y && target.x && target.y) {
+        ctx.moveTo(source.x, source.y);
+        ctx.lineTo(target.x, target.y);
+      }
+    });
+    
+    ctx.stroke();
+    
+    // Draw nodes
+    nodes.forEach(node => {
+      if (!node.x || !node.y) return;
+      
+      // Draw node circle
+      ctx.beginPath();
+      ctx.arc(node.x, node.y, node.radius || 5, 0, Math.PI * 2);
+      ctx.fillStyle = node.color || '#999';
+      ctx.fill();
+      
+      // Draw status indicator if zoomed in enough
+      if (transform.k > 1.5 && node.icontext) {
+        ctx.fillStyle = '#000';
+        ctx.font = `${10 / transform.k}px Arial`;
+        ctx.textAlign = 'center';
+        ctx.fillText(node.icontext, node.x, node.y + 3 / transform.k);
+      }
+      
+      // Highlight selected node
+      if (selectedNode && node.id === selectedNode.id) {
+        ctx.strokeStyle = '#ff6600';
+        ctx.lineWidth = 2 / transform.k;
+        ctx.stroke();
+      }
+    });
+    
+    ctx.restore();
+  };
+  
+  // Handle canvas click to select nodes
+  const handleCanvasClick = (event) => {
+    // Get mouse position in canvas coordinates
+    const rect = canvasRef.current?.getBoundingClientRect();
+    if (!rect) return;
+    
+    const mouseX = event.clientX - rect.left;
+    const mouseY = event.clientY - rect.top;
+    
+    // Convert to graph coordinates using current transform
+    const graphX = (mouseX - transform.x) / transform.k;
+    const graphY = (mouseY - transform.y) / transform.k;
+    
+    // Find closest node (simple distance calculation)
+    let closestNode = null;
+    let closestDistance = Infinity;
+    const hitRadius = 10 / transform.k; // Adjust hit radius based on zoom
+    
+    nodes.forEach(node => {
+      if (!node.x || !node.y) return;
+      
+      const dx = node.x - graphX;
+      const dy = node.y - graphY;
+      const distance = Math.sqrt(dx * dx + dy * dy);
+      
+      if (distance < hitRadius && distance < closestDistance) {
+        closestDistance = distance;
+        closestNode = node;
+      }
+    });
+    
+    if (closestNode) {
+      setSelectedNode(closestNode);
+    } else {
+      setSelectedNode(null);
+    }
+  };
+  
+  // Zoom to fit function
+  const zoomToFit = () => {
+    if (!nodes.length || !svgRef.current) return;
+    
+    // Find bounds of all nodes
+    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
+    
+    nodes.forEach(node => {
+      if (node.x === undefined || node.y === undefined) return;
+      
+      minX = Math.min(minX, node.x);
+      minY = Math.min(minY, node.y);
+      maxX = Math.max(maxX, node.x);
+      maxY = Math.max(maxY, node.y);
+    });
+    
+    if (minX === Infinity) return; // No valid nodes
+    
+    // Add padding
+    const padding = 50;
+    minX -= padding;
+    minY -= padding;
+    maxX += padding;
+    maxY += padding;
+    
+    // Calculate center point and scale
+    const centerX = (minX + maxX) / 2;
+    const centerY = (minY + maxY) / 2;
+    const scale = Math.min(
+      0.8 * width / (maxX - minX),
+      0.8 * height / (maxY - minY)
+    );
+    
+    // Apply transform with animation
+    const svg = d3.select(svgRef.current);
+    const zoom = d3.zoom().on('zoom', null);
+    
+    svg.transition()
+      .duration(750)
+      .call(
+        zoom.transform,
+        d3.zoomIdentity
+          .translate(width / 2, height / 2)
+          .scale(scale)
+          .translate(-centerX, -centerY)
+      )
+      .on('end', () => {
+        // Update transform state after transition
+        setTransform({
+          x: width / 2 - centerX * scale,
+          y: height / 2 - centerY * scale,
+          k: scale
+        });
+      });
+  };
+  
+  // Using original UI structure
+  return (
+    <div className="graph-container" style={{ width: '100%', height: '100%', position: 'relative' }}>
+      <PageHeader 
+        displayName={displayName}
+        onZoomToFit={zoomToFit}
+      />
+      
+      {/* Breadcrumb navigation (from original) */}
+      <div className="breadcrumb">
+        <ul className="breadcrumb" id="breadcrumb">
+          <li className="breadcrumb-item">
+            <a href="#" onClick={(e) => { e.preventDefault(); zoomToFit(); }}>Home</a>
+          </li>
+        </ul>
+      </div>
+      
+      {/* Loading overlay */}
+      {isSimulationRunning && (
+        <div
+          style={{
+            position: "absolute",
+            top: 0,
+            left: 0,
+            width: "100%",
+            height: "100%",
+            backgroundColor: "rgba(0, 0, 0, 0.5)",
+            display: "flex",
+            justifyContent: "center",
+            alignItems: "center",
+            zIndex: 10,
+          }}
+        >
+          <div style={{ color: "white", fontSize: "18px" }}>
+            {nodes.length > 0 ? 
+              `Calculating layout for ${nodes.length.toLocaleString()} nodes...` : 
+              'Loading data...'}
+          </div>
+        </div>
+      )}
+      
+      {/* Canvas for main rendering */}
+      <canvas
+        ref={canvasRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: `${width}px`,
+          height: `${height}px`,
+        }}
+        onClick={handleCanvasClick}
+      />
+      
+      {/* SVG overlay for zoom behavior */}
+      <svg
+        ref={svgRef}
+        style={{
+          position: 'absolute',
+          top: 0,
+          left: 0,
+          width: `${width}px`,
+          height: `${height}px`,
+          pointerEvents: 'all',
+          opacity: 0, // Make invisible but keep event handling
+        }}
+      >
+        <g></g>
+      </svg>
+      
+      {/* Node detail overlay */}
+      {showOverlay && overlayNode && (
+        <NodeDetail
+          node={overlayNode}
+          appName={appName}
+          width={width / 3}
+          height={height / 2}
+          onClose={() => {
+            setShowOverlay(false);
+            setOverlayNode(null);
+          }}
+        />
+      )}
+      
+      {/* Detail panel for selected node */}
+      {selectedNode && (
+        <div 
+          className="detail-panel"
+          style={{
+            position: 'absolute',
+            right: 0,
+            top: 60,
+            width: '300px',
+            height: `${height - 60}px`,
+            background: 'white',
+            boxShadow: '-2px 0 5px rgba(0,0,0,0.1)',
+            zIndex: 5,
+            padding: '10px',
+            overflow: 'auto'
+          }}
+        >
+          <h3>{selectedNode.name}</h3>
+          <div>Status: {selectedNode.status}</div>
+          {selectedNode.progress !== undefined && (
+            <div>Progress: {Math.round(selectedNode.progress * 100)}%</div>
+          )}
+          <DetailTabs
+            width={280}
+            height={height - 150}
+            selectedNode={selectedNode}
+            nodes={nodes}
+            links={links}
+          />
+        </div>
+      )}
+    </div>
+  );
+};
+
+export default GraphOnly;
+
+
+// Simple PageHeader that only uses the zoomToFit function
+const PageHeader = ({ displayName, onZoomToFit }) => {
+  return (
+    <div className="page-header" style={{ padding: '10px', borderBottom: '1px solid #eee' }}>
+      <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+        <h2>{displayName}</h2>
+        <button onClick={onZoomToFit}>Fit All</button>
+      </div>
+    </div>
+  );
+};
