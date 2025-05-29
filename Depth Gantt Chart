@@ -79,10 +79,10 @@ const JobGanttChart = () => {
   const [hoveredJob, setHoveredJob] = useState(null);
   const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
   
-  // Enhanced job data with deeper nesting
+  // Enhanced sample data with the new date format
   const jobData = {
     "jobs": [
-      {"id": "JOB_001", "name": "Daily_Data_Extract", "startdate": "2025-05-28T06:00:00Z", "enddate": "2025-05-28T06:15:00Z", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
+      {"id": "JOB_001", "name": "Daily_Data_Extract", "startdate": "2025/05/28 06:00:00.000 +0000", "enddate": "2025/05/28 06:15:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
       
       // Level 1: Main Batch
       {"id": "BATCH_001", "name": "Data_Processing_Pipeline", "startdate": null, "enddate": null, "status": "BATCH", "progress": 0, "dependency": [], "parent": null, "isContainer": true},
@@ -93,34 +93,60 @@ const JobGanttChart = () => {
       {"id": "BATCH_001_OUTPUT", "name": "Output_Generation_Phase", "startdate": null, "enddate": null, "status": "BATCH", "progress": 0, "dependency": [], "parent": "BATCH_001", "isContainer": true},
       
       // Level 3: Jobs under validation sub-batch
-      {"id": "JOB_002", "name": "Customer_Data_Validation", "startdate": "2025-05-28T06:15:00Z", "enddate": "2025-05-28T06:25:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_001"], "parent": "BATCH_001_VALIDATION"},
-      {"id": "JOB_003", "name": "Financial_Data_Validation", "startdate": "2025-05-28T06:15:00Z", "enddate": "2025-05-28T06:30:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_001"], "parent": "BATCH_001_VALIDATION"},
+      {"id": "JOB_002", "name": "Customer_Data_Validation", "startdate": "2025/05/28 06:15:00.000 +0000", "enddate": "2025/05/28 06:25:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_001"], "parent": "BATCH_001_VALIDATION"},
+      {"id": "JOB_003", "name": "Financial_Data_Validation", "startdate": "2025/05/28 06:15:00.000 +0000", "enddate": "2025/05/28 06:30:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_001"], "parent": "BATCH_001_VALIDATION"},
       
       // Level 4: Sub-tasks under customer validation
       {"id": "BATCH_CUSTOMER_SUBTASKS", "name": "Customer_Validation_Subtasks", "startdate": null, "enddate": null, "status": "BATCH", "progress": 0, "dependency": [], "parent": "JOB_002", "isContainer": true},
-      {"id": "JOB_002_A", "name": "Email_Format_Check", "startdate": "2025-05-28T06:15:00Z", "enddate": "2025-05-28T06:18:00Z", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": "BATCH_CUSTOMER_SUBTASKS"},
-      {"id": "JOB_002_B", "name": "Phone_Number_Validation", "startdate": "2025-05-28T06:18:00Z", "enddate": "2025-05-28T06:22:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002_A"], "parent": "BATCH_CUSTOMER_SUBTASKS"},
-      {"id": "JOB_002_C", "name": "Address_Standardization", "startdate": "2025-05-28T06:22:00Z", "enddate": "2025-05-28T06:25:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002_B"], "parent": "BATCH_CUSTOMER_SUBTASKS"},
+      {"id": "JOB_002_A", "name": "Email_Format_Check", "startdate": "2025/05/28 06:15:00.000 +0000", "enddate": "2025/05/28 06:18:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": "BATCH_CUSTOMER_SUBTASKS"},
+      {"id": "JOB_002_B", "name": "Phone_Number_Validation", "startdate": "2025/05/28 06:18:00.000 +0000", "enddate": "2025/05/28 06:22:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002_A"], "parent": "BATCH_CUSTOMER_SUBTASKS"},
+      {"id": "JOB_002_C", "name": "Address_Standardization", "startdate": "2025/05/28 06:22:00.000 +0000", "enddate": "2025/05/28 06:25:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002_B"], "parent": "BATCH_CUSTOMER_SUBTASKS"},
       
       // Level 3: Jobs under transformation sub-batch
-      {"id": "JOB_004", "name": "Data_Transformation", "startdate": "2025-05-28T06:30:00Z", "enddate": "2025-05-28T07:00:00Z", "status": "RUNNING", "progress": 65, "dependency": ["JOB_002", "JOB_003"], "parent": "BATCH_001_TRANSFORM"},
-      {"id": "JOB_004_CLEAN", "name": "Data_Cleaning", "startdate": "2025-05-28T06:30:00Z", "enddate": "2025-05-28T06:45:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002", "JOB_003"], "parent": "BATCH_001_TRANSFORM"},
+      {"id": "JOB_004", "name": "Data_Transformation", "startdate": "2025/05/28 06:30:00.000 +0000", "enddate": "2025/05/28 07:00:00.000 +0000", "status": "RUNNING", "progress": 65, "dependency": ["JOB_002", "JOB_003"], "parent": "BATCH_001_TRANSFORM"},
+      {"id": "JOB_004_CLEAN", "name": "Data_Cleaning", "startdate": "2025/05/28 06:30:00.000 +0000", "enddate": "2025/05/28 06:45:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002", "JOB_003"], "parent": "BATCH_001_TRANSFORM"},
       
       // Level 3: Jobs under output sub-batch
       {"id": "JOB_005", "name": "Report_Generation", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_004"], "parent": "BATCH_001_OUTPUT"},
       {"id": "JOB_006", "name": "Email_Notification", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_005"], "parent": "BATCH_001_OUTPUT"},
       
       // Independent jobs
-      {"id": "JOB_007", "name": "Database_Backup", "startdate": "2025-05-28T02:00:00Z", "enddate": "2025-05-28T12:00:00Z", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
-      {"id": "JOB_008", "name": "Log_Cleanup", "startdate": "2025-05-28T03:00:00Z", "enddate": "2025-05-28T03:05:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_007"], "parent": null},
+      {"id": "JOB_007", "name": "Database_Backup", "startdate": "2025/05/28 02:00:00.000 +0000", "enddate": "2025/05/28 12:00:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
+      {"id": "JOB_008", "name": "Log_Cleanup", "startdate": "2025/05/28 03:00:00.000 +0000", "enddate": "2025/05/28 03:05:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_007"], "parent": null},
       
       // Another batch with deep nesting
       {"id": "BATCH_002", "name": "System_Monitoring_Suite", "startdate": null, "enddate": null, "status": "BATCH", "progress": 0, "dependency": [], "parent": null, "isContainer": true},
-      {"id": "JOB_009", "name": "System_Health_Check", "startdate": "2025-05-28T04:00:00Z", "enddate": null, "status": "FAILED", "progress": 80, "dependency": [], "parent": "BATCH_002"},
+      {"id": "JOB_009", "name": "System_Health_Check", "startdate": "2025/05/28 04:00:00.000 +0000", "enddate": null, "status": "FAILED", "progress": 80, "dependency": [], "parent": "BATCH_002"},
       {"id": "JOB_010", "name": "Alert_Generation", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_009"], "parent": "BATCH_002"},
       
-      {"id": "JOB_016", "name": "Very_Long_Job_Name_That_Demonstrates_Layout", "startdate": "2025-05-28T08:00:00Z", "enddate": "2025-05-28T08:30:00Z", "status": "RUNNING", "progress": 45, "dependency": ["JOB_004"], "parent": null}
+      {"id": "JOB_016", "name": "Very_Long_Job_Name_That_Demonstrates_Layout", "startdate": "2025/05/28 08:00:00.000 +0000", "enddate": "2025/05/28 08:30:00.000 +0000", "status": "RUNNING", "progress": 45, "dependency": ["JOB_004"], "parent": null}
     ]
+  };
+
+  // Enhanced date parsing with timezone handling
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    
+    // Handle the format: "2025/04/29 11:30:00.000 +0000"
+    if (typeof dateString === 'string') {
+      // Parse the original format and convert to local timezone
+      let cleanDate = dateString;
+      
+      // If it has timezone offset, handle it properly
+      if (cleanDate.includes('+') || cleanDate.includes('-')) {
+        // Replace forward slashes with hyphens and handle timezone
+        cleanDate = cleanDate.replace(/(\d{4})\/(\d{2})\/(\d{2})/, '$1-$2-$3');
+        // Parse as UTC and let browser convert to local timezone
+        return new Date(cleanDate);
+      }
+      
+      // If no timezone, treat as local time
+      cleanDate = cleanDate.replace(/\.\d{3}/, ''); // Remove milliseconds
+      cleanDate = cleanDate.replace(/(\d{4})\/(\d{2})\/(\d{2})/, '$1-$2-$3');
+      return new Date(cleanDate);
+    }
+    
+    return new Date(dateString);
   };
 
   // Enhanced hierarchical structure builder
@@ -133,8 +159,8 @@ const JobGanttChart = () => {
       const processedJob = {
         ...job,
         name: job.name.replace(/_/g, ' '),
-        startdate: job.startdate ? new Date(job.startdate) : null,
-        enddate: job.enddate ? new Date(job.enddate) : null,
+        startdate: parseDate(job.startdate), // Use enhanced parsing
+        enddate: parseDate(job.enddate), // Use enhanced parsing
         children: [],
         level: 0,
         isContainer: job.isContainer || job.status === 'BATCH'
@@ -265,47 +291,77 @@ const JobGanttChart = () => {
     setCollapsedTasks(newCollapsed);
   };
 
-  // Generate timeline - full 24 hour view
+  // Generate dynamic 30-hour timeline based on earliest job start
   const timelineRange = useMemo(() => {
     const dates = [];
-    const baseDate = new Date('2025-05-28');
     
-    // Create 24 hour timeline (0:00 to 23:00)
-    for (let hour = 0; hour < 24; hour++) {
-      const time = new Date(baseDate);
-      time.setHours(hour, 0, 0, 0);
+    // Find the earliest start date from all jobs
+    let earliestDate = null;
+    
+    const findEarliestDate = (jobList) => {
+      jobList.forEach(job => {
+        if (job.startdate) {
+          const startDate = parseDate(job.startdate);
+          if (startDate && (!earliestDate || startDate < earliestDate)) {
+            earliestDate = startDate;
+          }
+        }
+        if (job.children && job.children.length > 0) {
+          findEarliestDate(job.children);
+        }
+      });
+    };
+    
+    // Search through the raw job data for earliest date
+    findEarliestDate(jobData.jobs.map(job => ({
+      ...job,
+      startdate: job.startdate
+    })));
+    
+    // If no dates found, use a default date
+    if (!earliestDate) {
+      earliestDate = parseDate("2025/05/28 02:00:00.000 +0000");
+    }
+    
+    // Start timeline 1 hour before the earliest job
+    const timelineStart = new Date(earliestDate.getTime() - (60 * 60 * 1000)); // -1 hour
+    
+    // Create 30 hours timeline from that point
+    for (let hour = 0; hour < 30; hour++) {
+      const time = new Date(timelineStart.getTime() + (hour * 60 * 60 * 1000));
       dates.push(time);
     }
     
     return dates;
-  }, []);
+  }, [jobData]);
 
-  // Calculate position and width for job bars (24 hour timeline)
+  // Calculate position and width for job bars with 30-hour timeline
   const getJobBarStyle = (job) => {
     if (!job.startdate || timelineRange.length === 0) {
       // For jobs without timeline, show a small bar at the beginning
       return { left: '1%', width: '2%' };
     }
     
-    // Get the start and end of the day in the same timezone
-    const baseDate = new Date('2025-05-28T00:00:00');
-    const endOfDay = new Date('2025-05-28T23:59:59');
+    // Use the timeline start and end from our 30-hour range
+    const timelineStart = timelineRange[0];
+    const timelineEnd = timelineRange[timelineRange.length - 1];
+    const timelineDurationMs = timelineEnd.getTime() - timelineStart.getTime();
     
-    // Convert job dates to same timezone for calculation
+    // Job dates are already in local timezone from parseDate
     const jobStartTime = new Date(job.startdate);
     const jobEndTime = job.enddate ? new Date(job.enddate) : new Date(jobStartTime.getTime() + 15 * 60 * 1000);
     
-    // Calculate hours from start of day
-    const startHour = jobStartTime.getHours() + (jobStartTime.getMinutes() / 60);
-    const endHour = jobEndTime.getHours() + (jobEndTime.getMinutes() / 60);
+    // Calculate position relative to the timeline start
+    const jobStartOffset = jobStartTime.getTime() - timelineStart.getTime();
+    const jobDuration = jobEndTime.getTime() - jobStartTime.getTime();
     
-    // Calculate position as percentage of 24 hours
-    const left = (startHour / 24) * 100;
-    const width = ((endHour - startHour) / 24) * 100;
+    // Calculate position as percentage of 30-hour timeline
+    const left = Math.max(0, (jobStartOffset / timelineDurationMs) * 100);
+    const width = Math.max(0.5, (jobDuration / timelineDurationMs) * 100);
     
     return { 
-      left: `${Math.max(0, left)}%`, 
-      width: `${Math.max(0.5, width)}%` 
+      left: `${left}%`, 
+      width: `${width}%` 
     };
   };
 
@@ -314,7 +370,8 @@ const JobGanttChart = () => {
     return date.toLocaleTimeString('en-US', { 
       hour: '2-digit', 
       minute: '2-digit',
-      hour12: false
+      hour12: false,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
     });
   };
 
@@ -323,7 +380,8 @@ const JobGanttChart = () => {
     return date.toLocaleDateString('en-US', {
       month: 'short',
       day: 'numeric',
-      year: 'numeric'
+      year: 'numeric',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
     }) + ' ' + formatTime(date);
   };
 
@@ -477,13 +535,17 @@ const JobGanttChart = () => {
             display: 'flex',
             flexDirection: 'column'
           }}>
-            {/* Timeline Header - Fixed */}
+            {/* Timeline Header - Fixed, scrolls with content */}
             <div style={{
               backgroundColor: '#f9fafb',
               borderBottom: '1px solid #e5e7eb',
-              flexShrink: 0
+              flexShrink: 0,
+              overflowX: 'hidden' // Hide scrollbar in header
             }}>
-              <div style={{ display: 'flex' }}>
+              <div style={{ 
+                display: 'flex',
+                minWidth: `${400 + 30 * 60}px` // Updated for 30 hours
+              }}>
                 {/* Job Names Column Header */}
                 <div style={{
                   width: '400px', // Match the job column width
@@ -502,13 +564,13 @@ const JobGanttChart = () => {
                     textOverflow: 'ellipsis',
                     width: '100%'
                   }}>
-                    Job / Batch Hierarchy
+                    Job / Batch Hierarchy (Local Time)
                   </span>
                 </div>
                 
                 {/* Timeline Hours Header */}
                 <div style={{ 
-                  width: `${24 * 60}px`,
+                  width: `${30 * 60}px`, // Updated for 30 hours
                   position: 'relative',
                   overflow: 'hidden',
                   flexShrink: 0
@@ -521,16 +583,26 @@ const JobGanttChart = () => {
                       <div 
                         key={index}
                         style={{
-                          padding: '8px',
-                          fontSize: '12px',
+                          padding: '6px 4px', // Slightly smaller padding for more hours
+                          fontSize: '11px', // Slightly smaller font
                           textAlign: 'center',
                           borderRight: '1px solid #e5e7eb',
                           color: '#6b7280',
                           width: '60px',
-                          flexShrink: 0
+                          flexShrink: 0,
+                          display: 'flex',
+                          flexDirection: 'column',
+                          alignItems: 'center'
                         }}
                       >
-                        {time.getHours().toString().padStart(2, '0')}:00
+                        <div style={{ fontWeight: '500' }}>
+                          {time.getHours().toString().padStart(2, '0')}:00
+                        </div>
+                        {index === 0 || time.getHours() === 0 ? (
+                          <div style={{ fontSize: '9px', color: '#9ca3af', marginTop: '2px' }}>
+                            {time.getDate()}/{time.getMonth() + 1}
+                          </div>
+                        ) : null}
                       </div>
                     ))}
                   </div>
@@ -539,13 +611,22 @@ const JobGanttChart = () => {
             </div>
 
             {/* Scrollable Job Rows */}
-            <div style={{ 
-              flex: 1, 
-              overflowX: 'auto',
-              overflowY: 'auto'
-            }}>
+            <div 
+              style={{ 
+                flex: 1, 
+                overflowX: 'auto',
+                overflowY: 'auto'
+              }}
+              onScroll={(e) => {
+                // Sync header scroll with content scroll
+                const header = e.target.previousElementSibling;
+                if (header) {
+                  header.scrollLeft = e.target.scrollLeft;
+                }
+              }}
+            >
               <div style={{
-                minWidth: `${400 + 24 * 60}px`, // Updated for new job column width
+                minWidth: `${400 + 30 * 60}px`, // Updated for 30-hour timeline
                 height: 'fit-content'
               }}>
                 {flatJobs.map((job, index) => {
@@ -656,9 +737,9 @@ const JobGanttChart = () => {
 
                       {/* Timeline Column */}
                       <div style={{
-                        width: `${24 * 60}px`, // Fixed width for timeline
+                        width: `${30 * 60}px`, // Updated for 30-hour timeline
                         position: 'relative',
-                        height: '52px', // Slightly increased height
+                        height: '52px',
                         padding: '8px',
                         flexShrink: 0
                       }}>
