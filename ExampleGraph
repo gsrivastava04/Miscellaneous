@@ -439,87 +439,77 @@ const JobGanttChart = () => {
             display: 'flex',
             flexDirection: 'column'
           }}>
-            {/* Synchronized scroll container for both header and content */}
-            <div 
-              style={{
-                flex: 1,
-                overflowX: 'auto',
-                overflowY: 'auto'
-              }}
-              onScroll={(e) => {
-                // Sync scroll position with timeline header if needed
-                const scrollLeft = e.target.scrollLeft;
-                // This ensures header and content scroll together
-              }}
-            >
-              <div style={{
-                minWidth: `${384 + 24 * 60}px`,
-                height: 'fit-content'
-              }}>
-                {/* Timeline Header - Fixed to content */}
+            {/* Timeline Header - Fixed */}
+            <div style={{
+              backgroundColor: '#f9fafb',
+              borderBottom: '1px solid #e5e7eb',
+              flexShrink: 0
+            }}>
+              <div style={{ display: 'flex' }}>
+                {/* Job Names Column Header */}
                 <div style={{
-                  backgroundColor: '#f9fafb',
-                  borderBottom: '1px solid #e5e7eb',
-                  position: 'sticky',
-                  top: 0,
-                  zIndex: 10
+                  width: '384px',
+                  padding: '12px',
+                  fontWeight: '600',
+                  color: '#374151',
+                  borderRight: '1px solid #e5e7eb',
+                  overflow: 'hidden',
+                  display: 'flex',
+                  alignItems: 'center',
+                  flexShrink: 0
                 }}>
-                  <div style={{ display: 'flex' }}>
-                    {/* Job Names Column Header */}
-                    <div style={{
-                      width: '384px',
-                      padding: '12px',
-                      fontWeight: '600',
-                      color: '#374151',
-                      borderRight: '1px solid #e5e7eb',
-                      overflow: 'hidden',
-                      display: 'flex',
-                      alignItems: 'center',
-                      flexShrink: 0
-                    }}>
-                      <span style={{
-                        whiteSpace: 'nowrap',
-                        overflow: 'hidden',
-                        textOverflow: 'ellipsis',
-                        width: '100%'
-                      }}>
-                        Job / Batch
-                      </span>
-                    </div>
-                    
-                    {/* Timeline Hours Header */}
-                    <div style={{ 
-                      width: `${24 * 60}px`,
-                      position: 'relative',
-                      overflow: 'hidden',
-                      flexShrink: 0
-                    }}>
-                      <div style={{ 
-                        display: 'flex',
-                        width: '100%'
-                      }}>
-                        {timelineRange.map((time, index) => (
-                          <div 
-                            key={index}
-                            style={{
-                              padding: '8px',
-                              fontSize: '12px',
-                              textAlign: 'center',
-                              borderRight: '1px solid #e5e7eb',
-                              color: '#6b7280',
-                              width: '60px',
-                              flexShrink: 0
-                            }}
-                          >
-                            {time.getHours().toString().padStart(2, '0')}:00
-                          </div>
-                        ))}
+                  <span style={{
+                    whiteSpace: 'nowrap',
+                    overflow: 'hidden',
+                    textOverflow: 'ellipsis',
+                    width: '100%'
+                  }}>
+                    Job / Batch
+                  </span>
+                </div>
+                
+                {/* Timeline Hours Header - No scroll, fixed width */}
+                <div style={{ 
+                  width: `${24 * 60}px`,
+                  position: 'relative',
+                  overflow: 'hidden',
+                  flexShrink: 0
+                }}>
+                  <div style={{ 
+                    display: 'flex',
+                    width: '100%'
+                  }}>
+                    {timelineRange.map((time, index) => (
+                      <div 
+                        key={index}
+                        style={{
+                          padding: '8px',
+                          fontSize: '12px',
+                          textAlign: 'center',
+                          borderRight: '1px solid #e5e7eb',
+                          color: '#6b7280',
+                          width: '60px',
+                          flexShrink: 0
+                        }}
+                      >
+                        {time.getHours().toString().padStart(2, '0')}:00
                       </div>
-                    </div>
+                    ))}
                   </div>
                 </div>
+              </div>
+            </div>
 
-                {/* Job Rows */}
+            {/* Scrollable Job Rows */}
+            <div style={{ 
+              flex: 1, 
+              overflowX: 'auto',
+              overflowY: 'auto'
+            }}>
+              <div style={{
+                minWidth: `${384 + 24 * 60}px`, // Minimum width to trigger horizontal scroll
+                height: 'fit-content'
+              }}>
                 {flatJobs.map((job, index) => {
                   const JobIcon = getJobIcon(job);
                   const indentWidth = job.level * 20;
@@ -530,7 +520,8 @@ const JobGanttChart = () => {
                       key={`${job.id}-${job.level}`}
                       style={{
                         display: 'flex',
-                        borderBottom: '1px solid #e5e7eb'
+                        borderBottom: '1px solid #e5e7eb',
+                        minWidth: `${384 + 24 * 60}px` // Fixed minimum width
                       }}
                       onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
                       onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
@@ -629,7 +620,7 @@ const JobGanttChart = () => {
 
                       {/* Timeline Column */}
                       <div style={{
-                        width: `${24 * 60}px`,
+                        width: `${24 * 60}px`, // Fixed width for timeline
                         position: 'relative',
                         height: '48px',
                         padding: '8px',
