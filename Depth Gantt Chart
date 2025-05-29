@@ -486,7 +486,7 @@ const JobGanttChart = () => {
               <div style={{ display: 'flex' }}>
                 {/* Job Names Column Header */}
                 <div style={{
-                  width: '450px', // Increased width for deeper nesting
+                  width: '400px', // Match the job column width
                   padding: '12px',
                   fontWeight: '600',
                   color: '#374151',
@@ -545,13 +545,13 @@ const JobGanttChart = () => {
               overflowY: 'auto'
             }}>
               <div style={{
-                minWidth: `${450 + 24 * 60}px`, // Adjusted for wider job column
+                minWidth: `${400 + 24 * 60}px`, // Updated for new job column width
                 height: 'fit-content'
               }}>
                 {flatJobs.map((job, index) => {
                   const JobIcon = getJobIcon(job);
                   const statusColor = getStatusColor(job.status);
-                  const indentStyle = getIndentStyle(job.level);
+                  // Remove indentStyle - we're handling depth differently now
                   
                   return (
                     <div 
@@ -559,57 +559,46 @@ const JobGanttChart = () => {
                       style={{
                         display: 'flex',
                         borderBottom: '1px solid #e5e7eb',
-                        minWidth: `${450 + 24 * 60}px`,
-                        ...indentStyle
+                        minWidth: `${400 + 24 * 60}px`, // Updated width
+                        backgroundColor: 'transparent' // Remove the indentStyle affecting background
                       }}
                       onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
                       onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
                     >
-                      {/* Job Info Column */}
+                      {/* Job Info Column - Fixed Width with Traditional Tree Indentation */}
                       <div style={{
-                        width: '450px', // Increased width
+                        width: '400px', 
                         padding: '12px',
                         borderRight: '1px solid #e5e7eb',
                         flexShrink: 0,
-                        overflow: 'visible'
+                        overflow: 'hidden' // Prevent column expansion
                       }}>
                         <div style={{
                           display: 'flex',
-                          alignItems: 'flex-start',
-                          paddingLeft: `${Math.min(job.level * 16, 96)}px` // Cap indentation
+                          alignItems: 'center',
+                          paddingLeft: `${job.level * 16}px`, // Traditional tree indentation
+                          width: '100%'
                         }}>
-                          {/* Level indicator */}
-                          {job.level > 0 && (
-                            <div style={{
-                              width: '2px',
-                              height: '100%',
-                              backgroundColor: '#d1d5db',
-                              marginRight: '8px',
-                              opacity: 0.5
-                            }} />
-                          )}
-                          
                           {/* Collapse/Expand Button */}
                           {hasChildren(job) && (
                             <button
                               onClick={() => toggleJobCollapse(job.id)}
                               style={{
-                                marginRight: '8px',
-                                padding: '4px',
-                                borderRadius: '4px',
+                                marginRight: '6px',
+                                padding: '2px',
+                                borderRadius: '3px',
                                 border: 'none',
                                 backgroundColor: 'transparent',
                                 cursor: 'pointer',
-                                flexShrink: 0,
-                                marginTop: '2px'
+                                flexShrink: 0
                               }}
                               onMouseOver={(e) => e.target.style.backgroundColor = '#e5e7eb'}
                               onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
                             >
                               {collapsedTasks.has(job.id) ? (
-                                <ChevronRight style={{ width: '14px', height: '14px' }} />
+                                <ChevronRight style={{ width: '12px', height: '12px' }} />
                               ) : (
-                                <ChevronDown style={{ width: '14px', height: '14px' }} />
+                                <ChevronDown style={{ width: '12px', height: '12px' }} />
                               )}
                             </button>
                           )}
@@ -617,71 +606,50 @@ const JobGanttChart = () => {
                           {/* Job Icon */}
                           <JobIcon 
                             style={{ 
-                              width: '16px', 
-                              height: '16px', 
-                              marginRight: '8px', 
-                              marginTop: '2px',
+                              width: '14px', 
+                              height: '14px', 
+                              marginRight: '6px',
                               flexShrink: 0,
                               color: statusColor 
                             }} 
                           />
                           
-                          {/* Job Details */}
-                          <div style={{
-                            display: 'flex',
-                            flexDirection: 'column',
-                            flex: 1,
-                            minWidth: 0
-                          }}>
-                            <div 
-                              style={{
-                                fontWeight: job.level === 0 ? '600' : job.isContainer ? '500' : '400',
-                                color: job.isContainer ? '#1f2937' : '#374151',
-                                fontSize: job.level === 0 ? '14px' : '13px',
-                                whiteSpace: 'nowrap',
-                                cursor: 'pointer',
-                                overflow: 'hidden',
-                                textOverflow: 'ellipsis',
-                                maxWidth: '100%'
-                              }}
-                              title={job.name}
-                              onMouseEnter={(e) => {
-                                if (job.name.length > 30) {
-                                  setHoveredJob({...job, isNameTooltip: true});
-                                  setTooltipPosition({
-                                    x: e.clientX,
-                                    y: e.clientY
-                                  });
-                                }
-                              }}
-                              onMouseLeave={() => {
-                                if (hoveredJob?.isNameTooltip) {
-                                  setHoveredJob(null);
-                                }
-                              }}
-                              onMouseMove={(e) => {
-                                if (hoveredJob?.isNameTooltip) {
-                                  setTooltipPosition({
-                                    x: e.clientX,
-                                    y: e.clientY
-                                  });
-                                }
-                              }}
-                            >
-                              {job.name}
-                            </div>
-                            
-                            {/* Level breadcrumb for deep items */}
-                            {job.level > 2 && (
-                              <div style={{
-                                fontSize: '11px',
-                                color: '#9ca3af',
-                                marginTop: '2px',
-                                fontStyle: 'italic'
-                              }}>
-                                Level {job.level}
-                              </div>
-                            )}
+                          {/* Job Name - Truncated within remaining space */}
+                          <div 
+                            style={{
+                              fontWeight: job.level === 0 ? '600' : job.isContainer ? '500' : '400',
+                              color: job.isContainer ? '#1f2937' : '#374151',
+                              fontSize: job.level === 0 ? '14px' : '13px',
+                              whiteSpace: 'nowrap',
+                              cursor: 'pointer',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              flex: 1, // Take remaining space after indentation
+                              minWidth: 0 // Important for flex truncation to work
+                            }}
+                            title={`${job.name} (Level ${job.level})`}
+                            onMouseEnter={(e) => {
+                              setHoveredJob({...job, isNameTooltip: true});
+                              setTooltipPosition({
+                                x: e.clientX,
+                                y: e.clientY
+                              });
+                            }}
+                            onMouseLeave={() => {
+                              if (hoveredJob?.isNameTooltip) {
+                                setHoveredJob(null);
+                              }
+                            }}
+                            onMouseMove={(e) => {
+                              if (hoveredJob?.isNameTooltip) {
+                                setTooltipPosition({
+                                  x: e.clientX,
+                                  y: e.clientY
+                                });
+                              }
+                            }}
+                          >
+                            {job.name}
                           </div>
                         </div>
                       </div>
@@ -855,13 +823,18 @@ const JobGanttChart = () => {
             }}
           >
             {hoveredJob.isNameTooltip ? (
-              // Simple name tooltip
+              // Enhanced name tooltip with level info
               <div style={{
                 fontSize: '14px',
                 whiteSpace: 'normal',
                 wordBreak: 'break-word'
               }}>
-                {hoveredJob.name.replace(/_/g, ' ')}
+                <div style={{ fontWeight: '600', marginBottom: '4px' }}>
+                  {hoveredJob.name.replace(/_/g, ' ')}
+                </div>
+                <div style={{ fontSize: '12px', color: '#d1d5db' }}>
+                  Level {hoveredJob.level} • {hoveredJob.isContainer ? 'Container' : 'Job'}
+                </div>
               </div>
             ) : (
               // Full job details tooltip
