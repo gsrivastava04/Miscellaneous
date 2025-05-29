@@ -1,1297 +1,874 @@
-// GraphOnly.tsx - Optimized for 10,000+ nodes
-import React, { useRef, useEffect, useState, useCallback, useMemo } from 'react';
-import * as d3 from 'd3';
-import { useLocation } from 'react-router-dom';
-import * as js from '../services/jobService.js';
-import * as api from '../services/api.js';
-import { D3Link, D3Node, RunHistoryEntry } from '../types/models.js';
-import { createHierarchy } from '../utils/hierarchy.js';
-import DetailTabs from './DetailTabs.js';
-import PageHeader from './PageHeader.js';
-import NodeDetail from './NodeDetail.js';
-import axios from 'axios';
-import { QuadTree } from '../utils/quadtree.js'; // Custom quadtree implementation
+import React, { useState, useMemo } from 'react';
 
-// Worker for force simulation
-const forceSimulationWorker = new Worker(new URL('../workers/forceSimulation.worker.ts', import.meta.url));
+// Simple icon components (no external dependencies)
+const ChevronDown = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+  </svg>
+);
 
-// Constants for better performance
-const RENDER_BATCH_SIZE = 1000; // Number of nodes to render per frame
-const NODE_RADIUS = 5; // Smaller radius for better performance
-const VISIBLE_DETAIL_THRESHOLD = 3; // Zoom level at which to show details
-const THROTTLE_DELAY = 100; // ms to throttle pan/zoom events
+const ChevronRight = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+);
 
-// Utility throttle function
-const throttle = (func, delay) => {
-  let lastCall = 0;
-  return function(...args) {
-    const now = Date.now();
-    if (now - lastCall >= delay) {
-      lastCall = now;
-      func(...args);
-    }
+const Calendar = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z" />
+  </svg>
+);
+
+const Clock = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M12 8v4l3 3m6-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const Folder = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+  </svg>
+);
+
+const FolderOpen = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const FileText = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const Play = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H15M13 16h3a2 2 0 002-2V9a2 2 0 00-2-2h-3" />
+  </svg>
+);
+
+const CheckCircle = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const XCircle = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const Pause = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const X = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+const JobGanttChart = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [collapsedTasks, setCollapsedTasks] = useState(new Set());
+  const [hoveredJob, setHoveredJob] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  
+  // Job data
+  const jobData = {
+    "jobs": [
+      {"id": "JOB_001", "name": "Daily_Data_Extract", "startdate": "2025-05-28T06:00:00Z", "enddate": "2025-05-28T06:15:00Z", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
+      {"id": "JOB_002", "name": "Customer_Data_Validation", "startdate": "2025-05-28T06:15:00Z", "enddate": "2025-05-28T06:25:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_001"], "parent": "JOB_BATCH_001"},
+      {"id": "JOB_003", "name": "Financial_Data_Validation", "startdate": "2025-05-28T06:15:00Z", "enddate": "2025-05-28T06:30:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_001"], "parent": "JOB_BATCH_001"},
+      {"id": "JOB_004", "name": "Data_Transformation", "startdate": "2025-05-28T06:30:00Z", "enddate": "2025-05-28T07:00:00Z", "status": "RUNNING", "progress": 65, "dependency": ["JOB_002", "JOB_003"], "parent": "JOB_BATCH_001"},
+      {"id": "JOB_005", "name": "Report_Generation", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_004"], "parent": "JOB_BATCH_001"},
+      {"id": "JOB_006", "name": "Email_Notification", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_005"], "parent": "JOB_BATCH_001"},
+      {"id": "JOB_007", "name": "Database_Backup", "startdate": "2025-05-28T02:00:00Z", "enddate": "2025-05-28T12:00:00Z", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
+      {"id": "JOB_008", "name": "Log_Cleanup", "startdate": "2025-05-28T03:00:00Z", "enddate": "2025-05-28T03:05:00Z", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_007"], "parent": null},
+      {"id": "JOB_009", "name": "System_Health_Check", "startdate": "2025-05-28T04:00:00Z", "enddate": null, "status": "FAILED", "progress": 80, "dependency": [], "parent": "JOB_BATCH_002"},
+      {"id": "JOB_010", "name": "Alert_Generation", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_009"], "parent": "JOB_BATCH_002"},
+      {"id": "JOB_011", "name": "Security_Audit_Check", "startdate": null, "enddate": null, "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
+      {"id": "JOB_012", "name": "License_Validation", "startdate": null, "enddate": null, "status": "SUCCESS", "progress": 100, "dependency": [], "parent": "JOB_BATCH_003"},
+      {"id": "JOB_013", "name": "Configuration_Sync", "startdate": null, "enddate": null, "status": "SUCCESS", "progress": 100, "dependency": [], "parent": "JOB_BATCH_003"},
+      {"id": "JOB_014", "name": "API_Health_Monitoring", "startdate": null, "enddate": null, "status": "FAILED", "progress": 0, "dependency": [], "parent": null},
+      {"id": "JOB_015", "name": "Cache_Warmup", "startdate": null, "enddate": null, "status": "SUCCESS", "progress": 100, "dependency": [], "parent": "JOB_BATCH_003"},
+      {"id": "JOB_016", "name": "Very_Long_Job_Name_That_Demonstrates_How_The_System_Handles_Extremely_Long_Task_Names_With_Multiple_Words_And_Detailed_Descriptions_That_Could_Potentially_Break_Layout", "startdate": "2025-05-28T08:00:00Z", "enddate": "2025-05-28T08:30:00Z", "status": "RUNNING", "progress": 45, "dependency": ["JOB_004"], "parent": null}
+    ]
   };
-};
 
-interface GraphVisualizerProps {
-  width?: number;
-  height?: number;
-}
+  // Transform jobs into hierarchical structure
+  const transformJobsToHierarchy = (jobs) => {
+    const jobMap = new Map();
+    const batchMap = new Map();
+    const rootJobs = [];
 
-/**
- * Optimized GraphOnly Component
- * - Uses a hybrid Canvas + SVG approach
- * - Implements spatial indexing via quadtree
- * - Offloads force simulation to Web Worker
- * - Implements level of detail rendering
- * - Uses throttling for expensive operations
- * - Implements efficient event delegation
- */
-const GraphOnly: React.FC<GraphVisualizerProps> = React.memo(({
-  width = window.innerWidth,
-  height = window.innerHeight,
-}) => {
-  // Component state
-  const [appName, setAppName] = useState('COGS');
-  const [displayName, setDisplayName] = useState('COGS');
-  const [isSimulationRunning, setIsSimulationRunning] = useState<boolean>(true);
-  const [data, setData] = useState<any>(null);
-  const [nodes, setNodes] = useState<D3Node[]>([]);
-  const [links, setLinks] = useState<D3Link[]>([]);
-  const [selectedNode, setSelectedNode] = useState<D3Node | null>(null);
-  const [highlightedNodes, setHighlightedNodes] = useState<Set<string>>(new Set());
-  const [zoomLevel, setZoomLevel] = useState<number>(1);
-  const [transform, setTransform] = useState({ x: 0, y: 0, k: 1 });
-  const [showOverlay, setShowOverlay] = useState<boolean>(false);
-  const [overlayNode, setOverlayNode] = useState<D3Node | null>(null);
-  const [user, setUser] = useState('');
-  const [password, setPassword] = useState('');
-  const [updatedNodeIds, setUpdatedNodeIds] = useState<Set<string>>(new Set());
-  const [viewportNodes, setViewportNodes] = useState<D3Node[]>([]);
-  const [interactiveNodeIds, setInteractiveNodeIds] = useState<Set<string>>(new Set());
-
-  // Refs for DOM elements and persistent values
-  const canvasRef = useRef<HTMLCanvasElement | null>(null);
-  const svgRef = useRef<SVGSVGElement | null>(null);
-  const nodesRef = useRef<D3Node[]>([]);
-  const linksRef = useRef<D3Link[]>([]);
-  const quadtreeRef = useRef<any>(null);
-  const animationFrameId = useRef<number | null>(null);
-  const isDragging = useRef<boolean>(false);
-  const renderStartIndex = useRef<number>(0);
-  const previousTransform = useRef({ x: 0, y: 0, k: 1 });
-  const needsFullRedraw = useRef<boolean>(true);
-  const nodePositionsCache = useRef<Map<string, {x: number, y: number}>>(new Map());
-  const location = useLocation();
-
-  // Status symbols mapping - same as original
-  const statusSymbols = {
-    Success: { symbol: "✓", color: "green" },
-    Failure: { symbol: "✗", color: "red" },
-    Running: { symbol: "▶", color: "blue" },
-    Waiting: { symbol: "⏳", color: "blue" },
-    On_Ice: { symbol: "❄", color: "orange" },
-    _: { symbol: "□", color: "gray" },
-  };
-
-  // For batched rendering
-  useEffect(() => {
-    if (nodes.length > 0 && !isSimulationRunning) {
-      startBatchRendering();
-    }
-    return () => {
-      if (animationFrameId.current) {
-        cancelAnimationFrame(animationFrameId.current);
-      }
-    };
-  }, [nodes, isSimulationRunning]);
-
-  // Load user credentials
-  useEffect(() => {
-    if (location.state?.user && location.state?.password) {
-      setUser(location.state.user);
-      setPassword(location.state.password);
-    } else {
-      console.error("User or password not provided in navigation state");
-    }
-  }, [location.state]);
-
-  // Set up API sync
-  useEffect(() => {
-    const handleSync = async (appName: string) => {
-      if (!user || !password) return;
-      
-      try {
-        await axios.post(`/api/service/sync?appId=${appName}`, {
-          enabled: true
-        }, {
-          headers: { user, password }
+    // Create batch containers
+    jobs.forEach(job => {
+      if (job.parent && !batchMap.has(job.parent)) {
+        batchMap.set(job.parent, {
+          id: job.parent,
+          name: job.parent.replace('JOB_BATCH_', 'Batch '),
+          startdate: null,
+          enddate: null,
+          status: 'BATCH',
+          progress: 0,
+          dependency: [],
+          parent: null,
+          children: [],
+          level: 0
         });
-      } catch (error) {
-        console.error("Error syncing:", error);
       }
-    };
-    
-    if (user && password && appName) {
-      handleSync(appName);
-    }
-  }, [appName, user, password]);
+    });
 
-  // Fetch job data
-  useEffect(() => {
-    const fetchJobs = async () => {
-      if (!appName || !user || !password) return;
-      
-      setIsSimulationRunning(true);
-      try {
-        const jobs = await api.fetchJobs(appName, user, password);
-        setData(jobs);
-      } catch (error) {
-        console.error("Error fetching jobs:", error);
-        setIsSimulationRunning(false);
-      }
-    };
-    
-    fetchJobs();
-  }, [appName, user, password]);
-
-  // Set up SSE connection with throttling
-  useEffect(() => {
-    if (!appName) return;
-    
-    let eventSource: EventSource | null = null;
-    let updateQueue: any[] = [];
-    let updateTimeout: NodeJS.Timeout | null = null;
-    
-    const processUpdates = () => {
-      if (updateQueue.length === 0) return;
-      
-      const batchedUpdates = [...updateQueue];
-      updateQueue = [];
-      
-      // Update nodes with new data
-      const nodeUpdates = new Map<string, any>();
-      batchedUpdates.forEach(job => nodeUpdates.set(job.name, job));
-      
-      // Only update changed nodes
-      const updatedIds = new Set<string>();
-      nodesRef.current.forEach(node => {
-        const update = nodeUpdates.get(node.name);
-        if (update && node.status !== update.status) {
-          node.status = update.status;
-          node.icontext = statusSymbols[update.status]?.symbol || statusSymbols._.symbol;
-          node.color = statusSymbols[update.status]?.color || statusSymbols._.color;
-          node.progress = update.progress;
-          updatedIds.add(node.id);
-        }
-      });
-      
-      // Trigger partial redraw for updated nodes
-      if (updatedIds.size > 0) {
-        setUpdatedNodeIds(updatedIds);
-        needsFullRedraw.current = true;
-        renderCanvas();
-      }
-    };
-    
-    const startSSE = () => {
-      eventSource = new EventSource(`/api/service/sse?appId=${appName}`);
-      eventSource.onmessage = (event) => {
-        try {
-          const updates = JSON.parse(event.data);
-          if (Array.isArray(updates) && updates.length > 0) {
-            updateQueue.push(...updates);
-            
-            // Throttle updates to prevent excessive rendering
-            if (!updateTimeout) {
-              updateTimeout = setTimeout(() => {
-                processUpdates();
-                updateTimeout = null;
-              }, 500); // Process updates at most every 500ms
-            }
-          }
-        } catch (error) {
-          console.error("Error processing SSE update:", error);
-        }
+    // Process each job
+    jobs.forEach(job => {
+      const processedJob = {
+        ...job,
+        name: job.name.replace(/_/g, ' '),
+        startdate: job.startdate ? new Date(job.startdate) : null,
+        enddate: job.enddate ? new Date(job.enddate) : null,
+        children: [],
+        level: job.parent ? 1 : 0
       };
-      eventSource.onerror = () => {
-        if (eventSource) {
-          eventSource.close();
-          // Attempt to reconnect after a delay
-          setTimeout(startSSE, 5000);
+
+      jobMap.set(job.id, processedJob);
+
+      if (job.parent) {
+        const batch = batchMap.get(job.parent);
+        batch.children.push(processedJob);
+        
+        // Update batch dates and progress
+        if (processedJob.startdate && (!batch.startdate || processedJob.startdate < batch.startdate)) {
+          batch.startdate = processedJob.startdate;
         }
-      };
-    };
-    
-    const stopSSE = () => {
-      if (eventSource) {
-        eventSource.close();
-        eventSource = null;
-      }
-      if (updateTimeout) {
-        clearTimeout(updateTimeout);
-        updateTimeout = null;
-      }
-    };
-    
-    // Handle tab visibility changes
-    const handleVisibilityChange = () => {
-      if (document.visibilityState === "visible") {
-        startSSE();
+        if (processedJob.enddate && (!batch.enddate || processedJob.enddate > batch.enddate)) {
+          batch.enddate = processedJob.enddate;
+        }
       } else {
-        stopSSE();
-      }
-    };
-    
-    document.addEventListener("visibilitychange", handleVisibilityChange);
-    startSSE();
-    
-    return () => {
-      document.removeEventListener("visibilitychange", handleVisibilityChange);
-      stopSSE();
-    };
-  }, [appName]);
-
-  // Process data and setup force simulation in worker
-  useEffect(() => {
-    if (!data) return;
-    
-    try {
-      const { idNameMap, nodes: newNodes, links: newLinks, componentTypes } = createHierarchy(data, true);
-      
-      // Cache initial positions
-      newNodes.forEach(node => {
-        if (!nodePositionsCache.current.has(node.id)) {
-          nodePositionsCache.current.set(node.id, { 
-            x: Math.random() * width, 
-            y: Math.random() * height 
-          });
-        }
-        // Apply cached position
-        const cachedPos = nodePositionsCache.current.get(node.id);
-        if (cachedPos) {
-          node.x = cachedPos.x;
-          node.y = cachedPos.y;
-        }
-      });
-      
-      // Update refs and state
-      nodesRef.current = newNodes;
-      linksRef.current = newLinks;
-      setNodes(newNodes);
-      setLinks(newLinks);
-      
-      // Build quadtree for spatial indexing
-      rebuildQuadtree(newNodes);
-      
-      // Start force simulation in worker
-      startForceSimulation(newNodes, newLinks);
-      
-    } catch (error) {
-      console.error("Error processing graph data:", error);
-      setIsSimulationRunning(false);
-    }
-  }, [data, width, height]);
-
-  // Initialize Canvas and SVG 
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    const svg = svgRef.current;
-    
-    if (!canvas || !svg || nodes.length === 0) return;
-    
-    // Set up canvas
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Adjust for device pixel ratio for sharp rendering
-    const pixelRatio = window.devicePixelRatio || 1;
-    canvas.width = width * pixelRatio;
-    canvas.height = height * pixelRatio;
-    canvas.style.width = `${width}px`;
-    canvas.style.height = `${height}px`;
-    ctx.scale(pixelRatio, pixelRatio);
-    
-    // Set up zoom behavior
-    const zoom = d3.zoom()
-      .scaleExtent([0.1, 10])
-      .on('zoom', throttle((event) => {
-        const newTransform = event.transform;
-        setTransform(newTransform);
-        
-        // Only do full recalculation if zoom level changed significantly
-        if (Math.abs(previousTransform.current.k - newTransform.k) > 0.1) {
-          updateViewportNodes(newTransform);
-          setZoomLevel(newTransform.k);
-        } else {
-          // For small changes in position, just update the transform
-          needsFullRedraw.current = true;
-        }
-        
-        previousTransform.current = newTransform;
-        renderCanvas();
-      }, THROTTLE_DELAY));
-    
-    // Apply zoom to SVG
-    d3.select(svg).call(zoom);
-    
-    // Initial zoom to fit
-    zoomToFit();
-    
-    // Initial render
-    needsFullRedraw.current = true;
-    renderCanvas();
-    
-    return () => {
-      // Clean up zoom
-      d3.select(svg).on('.zoom', null);
-    };
-  }, [nodes, width, height]);
-
-  // Force simulation in Web Worker
-  const startForceSimulation = (nodes: D3Node[], links: D3Link[]) => {
-    setIsSimulationRunning(true);
-    
-    // Listen for messages from the worker
-    forceSimulationWorker.onmessage = (event) => {
-      const { type, data } = event.data;
-      
-      if (type === 'tick') {
-        // Update positions from simulation
-        const updatedPositions = data.positions;
-        let hasChanged = false;
-        
-        // Apply new positions to nodes
-        nodes.forEach((node, i) => {
-          if (i < updatedPositions.length) {
-            const newPos = updatedPositions[i];
-            if (Math.abs(node.x - newPos.x) > 0.1 || Math.abs(node.y - newPos.y) > 0.1) {
-              node.x = newPos.x;
-              node.y = newPos.y;
-              // Update cache
-              nodePositionsCache.current.set(node.id, { x: newPos.x, y: newPos.y });
-              hasChanged = true;
-            }
-          }
-        });
-        
-        if (hasChanged) {
-          // Rebuild quadtree with new positions
-          rebuildQuadtree(nodes);
-          // Redraw canvas
-          needsFullRedraw.current = true;
-          renderCanvas();
-        }
-      } 
-      else if (type === 'end') {
-        // Simulation completed
-        console.log("Force simulation completed");
-        setIsSimulationRunning(false);
-        needsFullRedraw.current = true;
-        renderCanvas();
-      }
-    };
-    
-    // Send nodes and links to worker
-    const nodeData = nodes.map(n => ({ 
-      id: n.id, 
-      x: n.x, 
-      y: n.y, 
-      // Only send necessary data to worker
-      fixed: !!n.fx 
-    }));
-    
-    const linkData = links.map(l => ({
-      source: typeof l.source === 'object' ? l.source.id : l.source,
-      target: typeof l.target === 'object' ? l.target.id : l.target,
-      value: l.value || 1
-    }));
-    
-    forceSimulationWorker.postMessage({
-      type: 'start',
-      data: {
-        nodes: nodeData,
-        links: linkData,
-        width,
-        height
+        rootJobs.push(processedJob);
       }
     });
-  };
 
-  // Rebuild quadtree for spatial queries
-  const rebuildQuadtree = (nodes: D3Node[]) => {
-    quadtreeRef.current = d3.quadtree()
-      .x(d => d.x)
-      .y(d => d.y)
-      .addAll(nodes);
-  };
-
-  // Update viewport nodes based on current view
-  const updateViewportNodes = (newTransform: d3.ZoomTransform) => {
-    if (!nodes.length || !canvasRef.current) return;
-    
-    // Calculate visible area in graph coordinates
-    const visibleArea = {
-      x0: -newTransform.x / newTransform.k,
-      y0: -newTransform.y / newTransform.k,
-      x1: (width - newTransform.x) / newTransform.k,
-      y1: (height - newTransform.y) / newTransform.k
-    };
-    
-    // Expand area for smoother panning
-    const margin = 100 / newTransform.k;
-    visibleArea.x0 -= margin;
-    visibleArea.y0 -= margin;
-    visibleArea.x1 += margin;
-    visibleArea.y1 += margin;
-    
-    // Use quadtree to efficiently find nodes in visible area
-    const visible: D3Node[] = [];
-    quadtreeRef.current.visit((node, x0, y0, x1, y1) => {
-      if (!node.length) {
-        // Leaf node
-        const d = node.data;
-        if (d.x >= visibleArea.x0 && d.x <= visibleArea.x1 && 
-            d.y >= visibleArea.y0 && d.y <= visibleArea.y1) {
-          visible.push(d);
-        }
-      }
-      // Return true to skip if this quad is completely outside visible area
-      return x1 < visibleArea.x0 || x0 > visibleArea.x1 || 
-             y1 < visibleArea.y0 || y0 > visibleArea.y1;
-    });
-    
-    // For high zoom levels, we'll render more details
-    const shouldRenderInteractive = newTransform.k >= VISIBLE_DETAIL_THRESHOLD;
-    
-    // Identify nodes that should be rendered as interactive SVG elements
-    const interactiveIds = new Set<string>();
-    if (shouldRenderInteractive) {
-      // Limit interactive nodes to a reasonable number
-      const maxInteractiveNodes = 50;
-      visible.slice(0, maxInteractiveNodes).forEach(node => {
-        interactiveIds.add(node.id);
-      });
-    }
-    
-    // If selected node exists, make sure it's interactive
-    if (selectedNode) {
-      interactiveIds.add(selectedNode.id);
+    // Calculate batch progress
+    batchMap.forEach(batch => {
+      const totalProgress = batch.children.reduce((sum, job) => sum + job.progress, 0);
+      batch.progress = Math.round(totalProgress / batch.children.length);
       
-      // Also make connected nodes interactive
-      linksRef.current.forEach(link => {
-        const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-        const targetId = typeof link.target === 'object' ? link.target.id : link.target;
-        
-        if (sourceId === selectedNode.id) {
-          interactiveIds.add(targetId);
-        } else if (targetId === selectedNode.id) {
-          interactiveIds.add(sourceId);
-        }
-      });
-    }
-    
-    setViewportNodes(visible);
-    setInteractiveNodeIds(interactiveIds);
-  };
-
-  // Batch rendering for better performance
-  const startBatchRendering = () => {
-    if (!nodes.length) return;
-    
-    renderStartIndex.current = 0;
-    
-    const renderBatch = () => {
-      if (!canvasRef.current) return;
-      
-      // Render everything if a full redraw is needed
-      if (needsFullRedraw.current) {
-        renderCanvas();
-        needsFullRedraw.current = false;
-        renderStartIndex.current = 0;
-        animationFrameId.current = requestAnimationFrame(renderBatch);
-        return;
-      }
-      
-      // Otherwise, render in batches
-      const ctx = canvasRef.current.getContext('2d');
-      if (!ctx) return;
-      
-      // Calculate batch end index
-      const endIndex = Math.min(renderStartIndex.current + RENDER_BATCH_SIZE, nodes.length);
-      
-      // Render this batch
-      const { k, x, y } = transform;
-      
-      for (let i = renderStartIndex.current; i < endIndex; i++) {
-        const node = nodes[i];
-        drawNode(ctx, node, x, y, k);
-      }
-      
-      // Move to next batch
-      renderStartIndex.current = endIndex;
-      
-      // Continue if more nodes to render
-      if (renderStartIndex.current < nodes.length) {
-        animationFrameId.current = requestAnimationFrame(renderBatch);
-      }
-    };
-    
-    // Start the batch rendering process
-    animationFrameId.current = requestAnimationFrame(renderBatch);
-  };
-
-  // Main canvas rendering function
-  const renderCanvas = () => {
-    const canvas = canvasRef.current;
-    const svg = svgRef.current;
-    if (!canvas || !svg || !nodes.length) return;
-    
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    
-    // Clear canvas
-    ctx.clearRect(0, 0, canvas.width / window.devicePixelRatio, canvas.height / window.devicePixelRatio);
-    
-    // Apply current transform
-    ctx.save();
-    ctx.translate(transform.x, transform.y);
-    ctx.scale(transform.k, transform.k);
-    
-    // Decide what to draw based on zoom level
-    const shouldDrawLinks = transform.k > 0.3; // Don't draw links when zoomed out too far
-    const shouldDrawLabels = transform.k > 1.5; // Only draw labels when zoomed in
-    
-    // Draw links if needed
-    if (shouldDrawLinks) {
-      drawLinks(ctx);
-    }
-    
-    // Draw nodes - only those in viewport for performance
-    const visibleNodes = viewportNodes.length > 0 ? viewportNodes : nodes;
-    
-    // Sort nodes so that highlighted ones are drawn last (on top)
-    const nodesToDraw = [...visibleNodes].sort((a, b) => {
-      const aHighlighted = highlightedNodes.has(a.id) || a.id === selectedNode?.id;
-      const bHighlighted = highlightedNodes.has(b.id) || b.id === selectedNode?.id;
-      return aHighlighted === bHighlighted ? 0 : aHighlighted ? 1 : -1;
-    });
-    
-    // Draw all visible nodes
-    nodesToDraw.forEach(node => {
-      // Skip nodes that will be rendered in SVG
-      if (interactiveNodeIds.has(node.id)) return;
-      
-      drawNode(ctx, node, 0, 0, 1, shouldDrawLabels);
-    });
-    
-    ctx.restore();
-    
-    // Update SVG for interactive elements
-    updateInteractiveSvgElements();
-  };
-
-  // Draw a single node on canvas
-  const drawNode = (
-    ctx: CanvasRenderingContext2D, 
-    node: D3Node, 
-    offsetX: number, 
-    offsetY: number, 
-    scale: number, 
-    drawLabel: boolean = false
-  ) => {
-    if (!node.x || !node.y) return;
-    
-    const x = node.x;
-    const y = node.y;
-    const isHighlighted = highlightedNodes.has(node.id) || node.id === selectedNode?.id;
-    const isUpdated = updatedNodeIds.has(node.id);
-    const radius = isHighlighted ? NODE_RADIUS * 1.5 : NODE_RADIUS;
-    
-    // Draw node circle
-    ctx.beginPath();
-    ctx.arc(x, y, radius, 0, Math.PI * 2);
-    
-    // Style based on state
-    if (isHighlighted) {
-      ctx.fillStyle = '#ffcc00'; // Highlight color
-      ctx.strokeStyle = '#ff6600';
-      ctx.lineWidth = 2 / scale;
-    } else if (isUpdated) {
-      ctx.fillStyle = node.color || '#999';
-      ctx.strokeStyle = '#ff0000';
-      ctx.lineWidth = 1.5 / scale;
-    } else {
-      ctx.fillStyle = node.color || '#999';
-      ctx.strokeStyle = 'transparent';
-      ctx.lineWidth = 0;
-    }
-    
-    ctx.fill();
-    if (ctx.lineWidth > 0) {
-      ctx.stroke();
-    }
-    
-    // Draw label if zoomed in enough
-    if (drawLabel && node.name) {
-      ctx.font = `${10 / scale}px Arial`;
-      ctx.fillStyle = isHighlighted ? '#000' : '#666';
-      ctx.textAlign = 'center';
-      ctx.fillText(node.name, x, y - radius - 5 / scale);
-      
-      // Draw status if available
-      if (node.icontext) {
-        ctx.fillText(node.icontext, x, y + radius + 12 / scale);
-      }
-    }
-  };
-
-  // Draw links between nodes
-  const drawLinks = (ctx: CanvasRenderingContext2D) => {
-    const validLinks = linksRef.current.filter(link => {
-      // Ensure source and target are objects with x,y coordinates
-      const source = typeof link.source === 'object' ? link.source : null;
-      const target = typeof link.target === 'object' ? link.target : null;
-      return source && target && source.x !== undefined && target.x !== undefined;
-    });
-    
-    // Batch links by whether they're highlighted
-    const regularLinks = [];
-    const highlightedLinks = [];
-    
-    validLinks.forEach(link => {
-      const source = link.source as D3Node;
-      const target = link.target as D3Node;
-      
-      const isHighlighted = 
-        (selectedNode && (source.id === selectedNode.id || target.id === selectedNode.id)) ||
-        (highlightedNodes.has(source.id) && highlightedNodes.has(target.id));
-        
-      if (isHighlighted) {
-        highlightedLinks.push(link);
+      // Determine batch status
+      if (batch.children.every(job => job.status === 'SUCCESS')) {
+        batch.status = 'SUCCESS';
+      } else if (batch.children.some(job => job.status === 'FAILED')) {
+        batch.status = 'FAILED';
+      } else if (batch.children.some(job => job.status === 'RUNNING')) {
+        batch.status = 'RUNNING';
       } else {
-        regularLinks.push(link);
+        batch.status = 'WAITING';
       }
     });
+
+    // Add batches to root jobs
+    const result = [...rootJobs, ...Array.from(batchMap.values())];
     
-    // Draw regular links first
-    ctx.lineWidth = 0.5;
-    ctx.strokeStyle = '#ccc';
-    ctx.beginPath();
-    
-    regularLinks.forEach(link => {
-      const source = link.source as D3Node;
-      const target = link.target as D3Node;
-      
-      ctx.moveTo(source.x, source.y);
-      ctx.lineTo(target.x, target.y);
+    return result.sort((a, b) => {
+      if (a.startdate && b.startdate) return a.startdate - b.startdate;
+      if (a.startdate) return -1;
+      if (b.startdate) return 1;
+      return 0;
     });
-    
-    ctx.stroke();
-    
-    // Then draw highlighted links on top
-    if (highlightedLinks.length > 0) {
-      ctx.lineWidth = 1.5;
-      ctx.strokeStyle = '#ff6600';
-      ctx.beginPath();
-      
-      highlightedLinks.forEach(link => {
-        const source = link.source as D3Node;
-        const target = link.target as D3Node;
-        
-        ctx.moveTo(source.x, source.y);
-        ctx.lineTo(target.x, target.y);
-      });
-      
-      ctx.stroke();
+  };
+
+  const [jobs] = useState(transformJobsToHierarchy(jobData.jobs));
+
+  // Get status color
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'SUCCESS': return '#10B981';
+      case 'RUNNING': return '#F59E0B';
+      case 'FAILED': return '#EF4444';
+      case 'WAITING': return '#6B7280';
+      case 'BATCH': return '#3B82F6';
+      default: return '#6B7280';
     }
   };
 
-  // Update SVG interactive elements
-  const updateInteractiveSvgElements = () => {
-    const svg = d3.select(svgRef.current);
-    
-    // Apply zoom transform to the g element
-    const g = svg.select('g.interactive-layer');
-    g.attr('transform', `translate(${transform.x},${transform.y}) scale(${transform.k})`);
-    
-    // Get nodes that should be rendered as SVG
-    const interactiveNodes = nodes.filter(node => 
-      interactiveNodeIds.has(node.id) && node.x !== undefined && node.y !== undefined
-    );
-    
-    // Update SVG nodes
-    const nodeElements = g.selectAll('g.interactive-node')
-      .data(interactiveNodes, (d: any) => d.id);
-    
-    // Remove nodes no longer in the interactive set
-    nodeElements.exit().remove();
-    
-    // Add new interactive nodes
-    const enterNodes = nodeElements.enter()
-      .append('g')
-      .attr('class', 'interactive-node')
-      .style('cursor', 'pointer');
-    
-    // Add circle for each node
-    enterNodes.append('circle')
-      .attr('r', NODE_RADIUS * 1.2)
-      .attr('fill', d => d.color || '#999');
-    
-    // Add text label
-    enterNodes.append('text')
-      .attr('dy', -NODE_RADIUS * 2)
-      .attr('text-anchor', 'middle')
-      .attr('font-size', 10)
-      .text(d => d.name);
-    
-    // Add status indicator
-    enterNodes.append('text')
-      .attr('dy', NODE_RADIUS * 2.5)
-      .attr('text-anchor', 'middle')
-      .attr('font-size', 10)
-      .text(d => d.icontext || '');
-    
-    // Update positions of all nodes
-    g.selectAll('g.interactive-node')
-      .attr('transform', d => `translate(${d.x},${d.y})`);
-    
-    // Update styles based on selection state
-    g.selectAll('g.interactive-node circle')
-      .attr('fill', d => d.color || '#999')
-      .attr('stroke', d => (d.id === selectedNode?.id) ? '#ff6600' : 'none')
-      .attr('stroke-width', d => (d.id === selectedNode?.id) ? 2 : 0);
-    
-    // Add click handlers
-    g.selectAll('g.interactive-node')
-      .on('click', (event, d) => handleNodeClick(d))
-      .on('contextmenu', (event, d) => {
-        event.preventDefault();
-        handleNodeRightClick(d);
-      })
-      .on('mouseenter', (event, d) => handleNodeMouseEnter(d))
-      .on('mouseleave', (event, d) => handleNodeMouseLeave());
-  };
-
-  // Event handlers for nodes
-  const handleNodeClick = (node: D3Node) => {
-    setSelectedNode(node);
-    highlightConnectedNodes(node);
-    needsFullRedraw.current = true;
-    renderCanvas();
-  };
-
-  const handleNodeRightClick = (node: D3Node) => {
-    setOverlayNode(node);
-    setShowOverlay(true);
-  };
-
-  const handleNodeMouseEnter = (node: D3Node) => {
-    if (!isDragging.current) {
-      highlightConnectedNodes(node);
-      needsFullRedraw.current = true;
-      renderCanvas();
+  // Get status icon
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'SUCCESS': return CheckCircle;
+      case 'RUNNING': return Play;
+      case 'FAILED': return XCircle;
+      case 'WAITING': return Pause;
+      case 'BATCH': return Folder;
+      default: return FileText;
     }
   };
 
-  const handleNodeMouseLeave = () => {
-    if (!selectedNode && !isDragging.current) {
-      setHighlightedNodes(new Set());
-      needsFullRedraw.current = true;
-      renderCanvas();
-    }
-  };
-
-  // Helper to find and highlight connected nodes
-  const highlightConnectedNodes = (node: D3Node) => {
-    const connectedIds = new Set<string>([node.id]);
+  // Flatten jobs for rendering
+  const flattenJobs = (jobs, level = 0) => {
+    let result = [];
     
-    // Find connected nodes
-    linksRef.current.forEach(link => {
-      const sourceId = typeof link.source === 'object' ? link.source.id : link.source;
-      const targetId = typeof link.target === 'object' ? link.target.id : link.target;
+    for (const job of jobs) {
+      result.push({ ...job, level });
       
-      if (sourceId === node.id) {
-        connectedIds.add(targetId);
-      } else if (targetId === node.id) {
-        connectedIds.add(sourceId);
+      if (job.children && job.children.length > 0 && !collapsedTasks.has(job.id)) {
+        result = result.concat(flattenJobs(job.children, level + 1));
       }
-    });
+    }
     
-    setHighlightedNodes(connectedIds);
+    return result;
   };
 
-  // Handle canvas click for node detection
-  const handleCanvasClick = (event: React.MouseEvent) => {
-    if (isDragging.current) return;
-    
-    // Get mouse position in canvas coordinates
-    const rect = canvasRef.current?.getBoundingClientRect();
-    if (!rect) return;
-    
-    const mouseX = event.clientX - rect.left;
-    const mouseY = event.clientY - rect.top;
-    
-    // Convert to graph coordinates using current transform
-    const graphX = (mouseX - transform.x) / transform.k;
-    const graphY = (mouseY - transform.y) / transform.k;
-    
-    // Use quadtree to find the closest node efficiently
-    const searchRadius = 20 / transform.k; // Adjust search radius based on zoom
-    const closestNode = findClosestNode(graphX, graphY, searchRadius);
-    
-    if (closestNode) {
-      handleNodeClick(closestNode);
+  const flatJobs = useMemo(() => flattenJobs(jobs), [jobs, collapsedTasks]);
+
+  // Toggle job collapse/expand
+  const toggleJobCollapse = (jobId) => {
+    const newCollapsed = new Set(collapsedTasks);
+    if (newCollapsed.has(jobId)) {
+      newCollapsed.delete(jobId);
     } else {
-      // Clear selection if clicking empty space
-      setSelectedNode(null);
-      setHighlightedNodes(new Set());
-      needsFullRedraw.current = true;
-      renderCanvas();
+      newCollapsed.add(jobId);
+    }
+    setCollapsedTasks(newCollapsed);
+  };
+
+  // Generate timeline - full 24 hour view
+  const timelineRange = useMemo(() => {
+    const dates = [];
+    const baseDate = new Date('2025-05-28');
+    
+    // Create 24 hour timeline (0:00 to 23:00)
+    for (let hour = 0; hour < 24; hour++) {
+      const time = new Date(baseDate);
+      time.setHours(hour, 0, 0, 0);
+      dates.push(time);
+    }
+    
+    return dates;
+  }, []);
+
+  // Calculate position and width for job bars (24 hour timeline)
+  const getJobBarStyle = (job) => {
+    if (!job.startdate || timelineRange.length === 0) {
+      // For jobs without timeline, show a small bar at the beginning
+      return { left: '1%', width: '2%' };
+    }
+    
+    // Get the start and end of the day in the same timezone
+    const baseDate = new Date('2025-05-28T00:00:00');
+    const endOfDay = new Date('2025-05-28T23:59:59');
+    
+    // Convert job dates to same timezone for calculation
+    const jobStartTime = new Date(job.startdate);
+    const jobEndTime = job.enddate ? new Date(job.enddate) : new Date(jobStartTime.getTime() + 15 * 60 * 1000);
+    
+    // Calculate hours from start of day
+    const startHour = jobStartTime.getHours() + (jobStartTime.getMinutes() / 60);
+    const endHour = jobEndTime.getHours() + (jobEndTime.getMinutes() / 60);
+    
+    // Calculate position as percentage of 24 hours
+    const left = (startHour / 24) * 100;
+    const width = ((endHour - startHour) / 24) * 100;
+    
+    return { 
+      left: `${Math.max(0, left)}%`, 
+      width: `${Math.max(0.5, width)}%` 
+    };
+  };
+
+  const formatTime = (date) => {
+    if (!date) return 'Not scheduled';
+    return date.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false
+    });
+  };
+
+  const formatDateTime = (date) => {
+    if (!date) return 'Not scheduled';
+    return date.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric'
+    }) + ' ' + formatTime(date);
+  };
+
+  const formatDuration = (startDate, endDate) => {
+    if (!startDate || !endDate) return 'Unknown';
+    const diffMs = endDate.getTime() - startDate.getTime();
+    const diffMinutes = Math.round(diffMs / (1000 * 60));
+    
+    if (diffMinutes < 60) {
+      return `${diffMinutes} min`;
+    } else {
+      const hours = Math.floor(diffMinutes / 60);
+      const minutes = diffMinutes % 60;
+      return `${hours}h ${minutes}m`;
     }
   };
 
-  // Find closest node using quadtree
-  const findClosestNode = (x: number, y: number, radius: number): D3Node | null => {
-    if (!quadtreeRef.current) return null;
-    
-    let closestNode: D3Node | null = null;
-    let closestDistance = radius;
-    
-    // Use quadtree to efficiently search for nodes near the point
-    quadtreeRef.current.visit((node, x0, y0, x1, y1) => {
-      if (!node.length) {
-        // Leaf node
-        const d = node.data;
-        const dx = d.x - x;
-        const dy = d.y - y;
-        const distance = Math.sqrt(dx * dx + dy * dy);
-        
-        if (distance < closestDistance) {
-          closestDistance = distance;
-          closestNode = d;
-        }
-      }
-      
-      // Stop traversing if this quad is too far from search point
-      return x0 > x + radius || x1 < x - radius || y0 > y + radius || y1 < y - radius;
-    });
-    
-    return closestNode;
+  const hasChildren = (job) => job.children && job.children.length > 0;
+
+  const getJobIcon = (job) => {
+    if (hasChildren(job)) {
+      return collapsedTasks.has(job.id) ? Folder : FolderOpen;
+    }
+    return getStatusIcon(job.status);
   };
 
-  // Zoom to fit all nodes
-  const zoomToFit = () => {
-    if (!nodes.length || !svgRef.current) return;
-    
-    // Find bounds of all nodes
-    let minX = Infinity, minY = Infinity, maxX = -Infinity, maxY = -Infinity;
-    
-    nodes.forEach(node => {
-      if (node.x === undefined || node.y === undefined) return;
-      
-      minX = Math.min(minX, node.x);
-      minY = Math.min(minY, node.y);
-      maxX = Math.max(maxX, node.x);
-      maxY = Math.max(maxY, node.y);
+  const handleJobBarHover = (job, event) => {
+    setHoveredJob(job);
+    setTooltipPosition({
+      x: event.clientX,
+      y: event.clientY
     });
-    
-    if (minX === Infinity) return; // No valid nodes
-    
-    // Add padding
-    const padding = 50;
-    minX -= padding;
-    minY -= padding;
-    maxX += padding;
-    maxY += padding;
-    
-    // Calculate center point and scale
-    const centerX = (minX + maxX) / 2;
-    const centerY = (minY + maxY) / 2;
-    const scale = Math.min(
-      0.8 * width / (maxX - minX),
-      0.8 * height / (maxY - minY)
+  };
+
+  const handleJobBarLeave = () => {
+    setHoveredJob(null);
+  };
+
+  const getCurrentTime = () => {
+    return new Date();
+  };
+
+  if (!isOpen) {
+    return (
+      <div style={{ padding: '16px' }}>
+        <button
+          onClick={() => setIsOpen(true)}
+          style={{
+            padding: '12px 24px',
+            backgroundColor: '#2563eb',
+            color: 'white',
+            borderRadius: '8px',
+            border: 'none',
+            fontWeight: '500',
+            cursor: 'pointer'
+          }}
+          onMouseOver={(e) => e.target.style.backgroundColor = '#1d4ed8'}
+          onMouseOut={(e) => e.target.style.backgroundColor = '#2563eb'}
+        >
+          Open Job Timeline
+        </button>
+      </div>
     );
-    
-    // Apply transform
-    const svg = d3.select(svgRef.current);
-    const zoom = d3.zoom().on('zoom', null); // Create temporary zoom for transition
-    
-    svg.transition()
-      .duration(750)
-      .call(
-        zoom.transform as any,
-        d3.zoomIdentity
-          .translate(width / 2, height / 2)
-          .scale(scale)
-          .translate(-centerX, -centerY)
-      )
-      .on('end', () => {
-        // Update transform state after transition
-        setTransform({
-          x: width / 2 - centerX * scale,
-          y: height / 2 - centerY * scale,
-          k: scale
-        });
-        previousTransform.current = {
-          x: width / 2 - centerX * scale,
-          y: height / 2 - centerY * scale,
-          k: scale
-        };
-        
-        // Update viewport nodes with new transform
-        updateViewportNodes({
-          x: width / 2 - centerX * scale,
-          y: height / 2 - centerY * scale,
-          k: scale
-        } as d3.ZoomTransform);
-        
-        needsFullRedraw.current = true;
-        renderCanvas();
-      });
-  };
+  }
 
-  // Render the component
   return (
-    <div className="graph-container" style={{ width: '100%', height: '100%', position: 'relative' }}>
-      <PageHeader 
-        displayName={displayName}
-        onZoomToFit={zoomToFit}
+    <>
+      {/* Backdrop */}
+      <div 
+        style={{
+          position: 'fixed',
+          inset: 0,
+          backgroundColor: 'rgba(0, 0, 0, 0.5)',
+          zIndex: 40
+        }}
+        onClick={() => setIsOpen(false)} 
       />
       
-      {/* Breadcrumb navigation */}
-      <div className="breadcrumb" style={{ padding: '5px 10px', borderBottom: '1px solid #eee' }}>
-        <ul className="breadcrumb" id="breadcrumb" style={{ listStyle: 'none', padding: 0, margin: 0, display: 'flex' }}>
-          <li className="breadcrumb-item" style={{ marginRight: '5px' }}>
-            <a href="#" onClick={(e) => { e.preventDefault(); zoomToFit(); }}>Home</a>
-          </li>
-          {selectedNode && (
-            <>
-              <li style={{ margin: '0 5px' }}>/</li>
-              <li className="breadcrumb-item">{selectedNode.name}</li>
-            </>
-          )}
-        </ul>
-      </div>
-      
-      {/* Controls panel */}
-      <div className="controls" style={{ position: 'absolute', top: '50px', left: '10px', zIndex: 5 }}>
-        <div style={{ display: 'flex', flexDirection: 'column', background: 'white', padding: '5px', borderRadius: '4px', boxShadow: '0 1px 3px rgba(0,0,0,0.2)' }}>
-          <button 
-            onClick={zoomToFit}
-            style={{ margin: '3px', padding: '5px', cursor: 'pointer' }}
-            title="Fit all nodes"
-          >
-            Fit
-          </button>
-          <button 
-            onClick={() => {
-              setTransform({...transform, k: transform.k * 1.2});
-              needsFullRedraw.current = true;
-              renderCanvas();
-            }}
-            style={{ margin: '3px', padding: '5px', cursor: 'pointer' }}
-            title="Zoom in"
-          >
-            +
-          </button>
-          <button 
-            onClick={() => {
-              setTransform({...transform, k: transform.k / 1.2});
-              needsFullRedraw.current = true;
-              renderCanvas();
-            }}
-            style={{ margin: '3px', padding: '5px', cursor: 'pointer' }}
-            title="Zoom out"
-          >
-            -
-          </button>
-          <button 
-            onClick={() => {
-              setHighlightedNodes(new Set());
-              setSelectedNode(null);
-              needsFullRedraw.current = true;
-              renderCanvas();
-            }}
-            style={{ margin: '3px', padding: '5px', cursor: 'pointer' }}
-            title="Clear selection"
-          >
-            Clear
-          </button>
-        </div>
-      </div>
-      
-      {/* Stats display */}
-      <div style={{ position: 'absolute', bottom: '10px', left: '10px', background: 'rgba(255,255,255,0.8)', padding: '5px', borderRadius: '4px', fontSize: '12px' }}>
-        <div>Nodes: {nodes.length.toLocaleString()}</div>
-        <div>Links: {links.length.toLocaleString()}</div>
-        <div>Zoom: {transform.k.toFixed(1)}x</div>
-        <div>Visible: {viewportNodes.length.toLocaleString()}</div>
-      </div>
-      
-      {/* Loading overlay */}
-      {isSimulationRunning && (
-        <div
-          style={{
-            position: "absolute",
-            top: 0,
-            left: 0,
-            width: "100%",
-            height: "100%",
-            backgroundColor: "rgba(0, 0, 0, 0.5)",
-            display: "flex",
-            justifyContent: "center",
-            alignItems: "center",
-            zIndex: 10,
-          }}
-        >
-          <div style={{ color: "white", fontSize: "18px" }}>
-            Loading Graph ({nodes.length.toLocaleString()} nodes)...
-          </div>
-        </div>
-      )}
-      
-      {/* Main visualization container */}
+      {/* Popup Modal */}
       <div 
-        className="visualization-container"
-        style={{ position: 'relative', width: '100%', height: 'calc(100% - 40px)' }}
+        style={{
+          position: 'fixed',
+          top: '16px',
+          left: '16px',
+          right: '16px',
+          bottom: '16px',
+          backgroundColor: 'white',
+          borderRadius: '8px',
+          boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+          zIndex: 50,
+          display: 'flex',
+          flexDirection: 'column'
+        }}
       >
-        {/* Canvas for efficient rendering of most nodes/links */}
-        <canvas
-          ref={canvasRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: `${width}px`,
-            height: `${height}px`,
-          }}
-          onClick={handleCanvasClick}
-        />
-        
-        {/* SVG overlay for interactive elements */}
-        <svg
-          ref={svgRef}
-          style={{
-            position: 'absolute',
-            top: 0,
-            left: 0,
-            width: `${width}px`,
-            height: `${height}px`,
-            pointerEvents: 'none', // Let events pass through to canvas except for nodes
-          }}
-        >
-          <defs>
-            {/* Define markers for arrows */}
-            <marker
-              id="arrow"
-              viewBox="0 0 10 10"
-              refX="5"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#999" />
-            </marker>
-            <marker
-              id="arrow-highlighted"
-              viewBox="0 0 10 10"
-              refX="5"
-              refY="5"
-              markerWidth="6"
-              markerHeight="6"
-              orient="auto-start-reverse"
-            >
-              <path d="M 0 0 L 10 5 L 0 10 z" fill="#ff6600" />
-            </marker>
-          </defs>
-          <g className="interactive-layer">
-            {/* Interactive SVG nodes will be rendered here */}
-          </g>
-        </svg>
-      </div>
-      
-      {/* Node detail overlay */}
-      {showOverlay && overlayNode && (
-        <div
-          style={{
-            position: 'absolute',
-            top: '50%',
-            left: '50%',
-            transform: 'translate(-50%, -50%)',
-            background: 'white',
-            boxShadow: '0 4px 8px rgba(0,0,0,0.2)',
-            zIndex: 20,
-            borderRadius: '4px',
-            width: `${width / 3}px`,
-            maxHeight: `${height / 2}px`,
-            overflow: 'auto',
-          }}
-        >
-          <div style={{ display: 'flex', justifyContent: 'space-between', padding: '10px', borderBottom: '1px solid #eee' }}>
-            <h3 style={{ margin: 0 }}>{overlayNode.name}</h3>
-            <button
-              onClick={() => {
-                setShowOverlay(false);
-                setOverlayNode(null);
-              }}
-              style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
-            >
-              ×
-            </button>
-          </div>
-          <div style={{ padding: '10px' }}>
-            <NodeDetail
-              node={overlayNode}
-              appName={appName}
-              width={width / 3 - 20}
-              height={height / 2 - 60}
-              onClose={() => {
-                setShowOverlay(false);
-                setOverlayNode(null);
-              }}
-            />
-          </div>
+        {/* Header */}
+        <div style={{
+          display: 'flex',
+          alignItems: 'center',
+          justifyContent: 'space-between',
+          padding: '12px 16px',
+          borderBottom: '1px solid #e5e7eb',
+          flexShrink: 0
+        }}>
+          <h1 style={{
+            fontSize: '18px',
+            fontWeight: 'bold',
+            color: '#1f2937',
+            margin: 0
+          }}>
+            Job Execution Timeline
+          </h1>
+          <button
+            onClick={() => setIsOpen(false)}
+            style={{
+              padding: '4px',
+              borderRadius: '4px',
+              border: 'none',
+              backgroundColor: 'transparent',
+              cursor: 'pointer'
+            }}
+            onMouseOver={(e) => e.target.style.backgroundColor = '#f3f4f6'}
+            onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+          >
+            <X style={{ width: '20px', height: '20px', color: '#6b7280' }} />
+          </button>
         </div>
-      )}
-      
-      {/* Detail panel for selected node */}
-      {selectedNode && (
-        <div 
-          className="detail-panel"
-          style={{
-            position: 'absolute',
-            right: 0,
-            top: 60,
-            width: '300px',
-            height: `${height - 60}px`,
-            background: 'white',
-            boxShadow: '-2px 0 5px rgba(0,0,0,0.1)',
-            zIndex: 5,
+
+        {/* Main Content Area with Scroll */}
+        <div style={{
+          flex: 1,
+          overflow: 'hidden',
+          display: 'flex',
+          flexDirection: 'column'
+        }}>
+          {/* Timeline Container */}
+          <div style={{
+            flex: 1,
+            border: '1px solid #e5e7eb',
+            margin: '24px 24px 0 24px',
+            borderRadius: '8px',
             overflow: 'hidden',
             display: 'flex',
-            flexDirection: 'column',
-          }}
-        >
-          <div style={{ padding: '10px', borderBottom: '1px solid #eee' }}>
-            <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-              <h3 style={{ margin: 0 }}>{selectedNode.name}</h3>
-              <button
-                onClick={() => {
-                  setSelectedNode(null);
-                  setHighlightedNodes(new Set());
-                  needsFullRedraw.current = true;
-                  renderCanvas();
-                }}
-                style={{ background: 'none', border: 'none', cursor: 'pointer', fontSize: '16px' }}
-              >
-                ×
-              </button>
-            </div>
-            <div style={{ 
-              padding: '5px',
-              marginTop: '5px',
-              background: selectedNode.color || '#eee',
-              color: selectedNode.color === 'green' ? 'white' : 'black',
-              borderRadius: '4px',
-              display: 'inline-block'
-            }}>
-              Status: {selectedNode.status} {selectedNode.icontext}
-            </div>
-            {selectedNode.progress !== undefined && (
-              <div style={{ marginTop: '10px' }}>
-                <div>Progress: {Math.round(selectedNode.progress * 100)}%</div>
-                <div style={{ 
-                  height: '8px', 
-                  width: '100%', 
-                  background: '#eee', 
-                  borderRadius: '4px',
-                  marginTop: '5px'
+            flexDirection: 'column'
+          }}>
+            {/* Synchronized scroll container for both header and content */}
+            <div 
+              style={{
+                flex: 1,
+                overflowX: 'auto',
+                overflowY: 'auto'
+              }}
+              onScroll={(e) => {
+                // Sync scroll position with timeline header if needed
+                const scrollLeft = e.target.scrollLeft;
+                // This ensures header and content scroll together
+              }}
+            >
+              <div style={{
+                minWidth: `${384 + 24 * 60}px`,
+                height: 'fit-content'
+              }}>
+                {/* Timeline Header - Fixed to content */}
+                <div style={{
+                  backgroundColor: '#f9fafb',
+                  borderBottom: '1px solid #e5e7eb',
+                  position: 'sticky',
+                  top: 0,
+                  zIndex: 10
                 }}>
-                  <div style={{ 
-                    height: '100%', 
-                    width: `${Math.round(selectedNode.progress * 100)}%`,
-                    background: selectedNode.color || '#999',
-                    borderRadius: '4px'
-                  }} />
+                  <div style={{ display: 'flex' }}>
+                    {/* Job Names Column Header */}
+                    <div style={{
+                      width: '384px',
+                      padding: '12px',
+                      fontWeight: '600',
+                      color: '#374151',
+                      borderRight: '1px solid #e5e7eb',
+                      overflow: 'hidden',
+                      display: 'flex',
+                      alignItems: 'center',
+                      flexShrink: 0
+                    }}>
+                      <span style={{
+                        whiteSpace: 'nowrap',
+                        overflow: 'hidden',
+                        textOverflow: 'ellipsis',
+                        width: '100%'
+                      }}>
+                        Job / Batch
+                      </span>
+                    </div>
+                    
+                    {/* Timeline Hours Header */}
+                    <div style={{ 
+                      width: `${24 * 60}px`,
+                      position: 'relative',
+                      overflow: 'hidden',
+                      flexShrink: 0
+                    }}>
+                      <div style={{ 
+                        display: 'flex',
+                        width: '100%'
+                      }}>
+                        {timelineRange.map((time, index) => (
+                          <div 
+                            key={index}
+                            style={{
+                              padding: '8px',
+                              fontSize: '12px',
+                              textAlign: 'center',
+                              borderRight: '1px solid #e5e7eb',
+                              color: '#6b7280',
+                              width: '60px',
+                              flexShrink: 0
+                            }}
+                          >
+                            {time.getHours().toString().padStart(2, '0')}:00
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  </div>
                 </div>
+
+                {/* Job Rows */}
+                {flatJobs.map((job, index) => {
+                  const JobIcon = getJobIcon(job);
+                  const indentWidth = job.level * 20;
+                  const statusColor = getStatusColor(job.status);
+                  
+                  return (
+                    <div 
+                      key={`${job.id}-${job.level}`}
+                      style={{
+                        display: 'flex',
+                        borderBottom: '1px solid #e5e7eb'
+                      }}
+                      onMouseOver={(e) => e.currentTarget.style.backgroundColor = '#f9fafb'}
+                      onMouseOut={(e) => e.currentTarget.style.backgroundColor = 'transparent'}
+                    >
+                      {/* Job Info Column */}
+                      <div style={{
+                        width: '384px',
+                        padding: '16px',
+                        borderRight: '1px solid #e5e7eb',
+                        flexShrink: 0,
+                        overflow: 'visible'
+                      }}>
+                        <div style={{
+                          display: 'flex',
+                          alignItems: 'flex-start',
+                          paddingLeft: `${indentWidth}px`
+                        }}>
+                          {/* Collapse/Expand Button */}
+                          {hasChildren(job) && (
+                            <button
+                              onClick={() => toggleJobCollapse(job.id)}
+                              style={{
+                                marginRight: '8px',
+                                padding: '4px',
+                                borderRadius: '4px',
+                                border: 'none',
+                                backgroundColor: 'transparent',
+                                cursor: 'pointer',
+                                flexShrink: 0,
+                                marginTop: '4px'
+                              }}
+                              onMouseOver={(e) => e.target.style.backgroundColor = '#e5e7eb'}
+                              onMouseOut={(e) => e.target.style.backgroundColor = 'transparent'}
+                            >
+                              {collapsedTasks.has(job.id) ? (
+                                <ChevronRight style={{ width: '16px', height: '16px' }} />
+                              ) : (
+                                <ChevronDown style={{ width: '16px', height: '16px' }} />
+                              )}
+                            </button>
+                          )}
+                          
+                          {/* Job Icon */}
+                          <JobIcon 
+                            style={{ 
+                              width: '16px', 
+                              height: '16px', 
+                              marginRight: '8px', 
+                              marginTop: '4px',
+                              flexShrink: 0,
+                              color: statusColor 
+                            }} 
+                          />
+                          
+                          {/* Job Details */}
+                          <div 
+                            style={{
+                              fontWeight: job.level === 0 ? '600' : '500',
+                              color: '#1f2937',
+                              fontSize: job.level === 0 ? '16px' : '14px',
+                              whiteSpace: 'nowrap',
+                              cursor: 'pointer',
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              maxWidth: `${330 - indentWidth}px`,
+                              flex: 1
+                            }}
+                            title={job.name}
+                            onMouseEnter={(e) => {
+                              if (job.name.length > 30) {
+                                setHoveredJob({...job, isNameTooltip: true});
+                                setTooltipPosition({
+                                  x: e.clientX,
+                                  y: e.clientY
+                                });
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              if (hoveredJob?.isNameTooltip) {
+                                setHoveredJob(null);
+                              }
+                            }}
+                            onMouseMove={(e) => {
+                              if (hoveredJob?.isNameTooltip) {
+                                setTooltipPosition({
+                                  x: e.clientX,
+                                  y: e.clientY
+                                });
+                              }
+                            }}
+                          >
+                            {job.name}
+                          </div>
+                        </div>
+                      </div>
+
+                      {/* Timeline Column */}
+                      <div style={{
+                        width: `${24 * 60}px`,
+                        position: 'relative',
+                        height: '48px',
+                        padding: '8px',
+                        flexShrink: 0
+                      }}>
+                        <div style={{
+                          position: 'relative',
+                          height: '100%',
+                          width: '100%'
+                        }}>
+                          {/* Job Bar */}
+                          <div 
+                            style={{
+                              position: 'absolute',
+                              top: '50%',
+                              transform: 'translateY(-50%)',
+                              borderRadius: '8px',
+                              boxShadow: '0 1px 3px 0 rgba(0, 0, 0, 0.1)',
+                              display: 'flex',
+                              alignItems: 'center',
+                              cursor: 'pointer',
+                              height: job.level === 0 ? '24px' : '16px',
+                              ...getJobBarStyle(job),
+                              backgroundColor: statusColor,
+                              opacity: job.level === 0 ? 1 : 0.8
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!hoveredJob?.isNameTooltip) {
+                                handleJobBarHover(job, e);
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              if (!hoveredJob?.isNameTooltip) {
+                                handleJobBarLeave();
+                              }
+                            }}
+                            onMouseMove={(e) => {
+                              if (hoveredJob?.id === job.id && !hoveredJob?.isNameTooltip) {
+                                setTooltipPosition({
+                                  x: e.clientX,
+                                  y: e.clientY
+                                });
+                              }
+                            }}
+                          >
+                            {/* Progress Bar */}
+                            {job.progress > 0 && job.progress < 100 && (
+                              <div 
+                                style={{
+                                  height: '100%',
+                                  borderRadius: '8px',
+                                  backgroundColor: 'rgba(255, 255, 255, 0.3)',
+                                  width: `${job.progress}%`
+                                }}
+                              />
+                            )}
+                            
+                            {/* Job Label */}
+                            {job.level === 0 && (
+                              <div 
+                                style={{
+                                  fontSize: '12px',
+                                  fontWeight: '500',
+                                  color: 'white',
+                                  padding: '0 8px',
+                                  pointerEvents: 'none',
+                                  overflow: 'hidden',
+                                  textOverflow: 'ellipsis',
+                                  whiteSpace: 'nowrap',
+                                  width: '100%'
+                                }}
+                              >
+                                {job.startdate ? job.name : 'No Schedule'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
               </div>
-            )}
+            </div>
           </div>
-          <div style={{ flex: 1, overflow: 'auto' }}>
-            <DetailTabs
-              width={300}
-              height={height - 150}
-              selectedNode={selectedNode}
-              nodes={nodes}
-              links={links}
-            />
+          
+          {/* Footer with Legend */}
+          <div style={{
+            padding: '24px',
+            borderTop: '1px solid #e5e7eb',
+            flexShrink: 0
+          }}>
+            {/* Legend */}
+            <div style={{
+              display: 'flex',
+              flexWrap: 'wrap',
+              gap: '24px',
+              fontSize: '14px',
+              justifyContent: 'center'
+            }}>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <CheckCircle style={{ width: '16px', height: '16px', marginRight: '8px', color: '#10b981' }} />
+                <span style={{ color: '#6b7280' }}>Success</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Play style={{ width: '16px', height: '16px', marginRight: '8px', color: '#f59e0b' }} />
+                <span style={{ color: '#6b7280' }}>Running</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <XCircle style={{ width: '16px', height: '16px', marginRight: '8px', color: '#ef4444' }} />
+                <span style={{ color: '#6b7280' }}>Failed</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Pause style={{ width: '16px', height: '16px', marginRight: '8px', color: '#6b7280' }} />
+                <span style={{ color: '#6b7280' }}>Waiting</span>
+              </div>
+              <div style={{ display: 'flex', alignItems: 'center' }}>
+                <Folder style={{ width: '16px', height: '16px', marginRight: '8px', color: '#3b82f6' }} />
+                <span style={{ color: '#6b7280' }}>Batch</span>
+              </div>
+            </div>
           </div>
         </div>
-      )}
-    </div>
+
+        {/* Tooltip */}
+        {hoveredJob && (
+          <div 
+            style={{
+              position: 'fixed',
+              zIndex: 60,
+              backgroundColor: '#1f2937',
+              color: 'white',
+              padding: hoveredJob.isNameTooltip ? '8px 12px' : '16px',
+              borderRadius: '8px',
+              boxShadow: '0 25px 50px -12px rgba(0, 0, 0, 0.25)',
+              maxWidth: hoveredJob.isNameTooltip ? '400px' : '320px',
+              pointerEvents: 'none',
+              left: `${tooltipPosition.x + 10}px`,
+              top: `${tooltipPosition.y - 10}px`,
+              transform: 'translateY(-100%)'
+            }}
+          >
+            {hoveredJob.isNameTooltip ? (
+              // Simple name tooltip
+              <div style={{
+                fontSize: '14px',
+                whiteSpace: 'normal',
+                wordBreak: 'break-word'
+              }}>
+                {hoveredJob.name.replace(/_/g, ' ')}
+              </div>
+            ) : (
+              // Full job details tooltip
+              <>
+                <div style={{
+                  fontWeight: '600',
+                  fontSize: '18px',
+                  marginBottom: '8px'
+                }}>
+                  {hoveredJob.name}
+                </div>
+                
+                <div style={{ display: 'flex', flexDirection: 'column', gap: '8px', fontSize: '14px' }}>
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#d1d5db' }}>Status:</span>
+                    <span style={{ 
+                      fontWeight: '600',
+                      color: getStatusColor(hoveredJob.status)
+                    }}>
+                      {hoveredJob.status}
+                    </span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#d1d5db' }}>Start:</span>
+                    <span>{formatDateTime(hoveredJob.startdate)}</span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#d1d5db' }}>End:</span>
+                    <span>{formatDateTime(hoveredJob.enddate)}</span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#d1d5db' }}>Duration:</span>
+                    <span>{formatDuration(hoveredJob.startdate, hoveredJob.enddate)}</span>
+                  </div>
+                  
+                  <div style={{ display: 'flex', justifyContent: 'space-between' }}>
+                    <span style={{ color: '#d1d5db' }}>Progress:</span>
+                    <span style={{ fontWeight: '600' }}>{hoveredJob.progress}%</span>
+                  </div>
+                  
+                  {hoveredJob.dependency && hoveredJob.dependency.length > 0 && (
+                    <div style={{
+                      borderTop: '1px solid #4b5563',
+                      paddingTop: '8px',
+                      marginTop: '8px'
+                    }}>
+                      <span style={{ color: '#d1d5db' }}>Dependencies:</span>
+                      <div style={{ marginTop: '4px' }}>
+                        {hoveredJob.dependency.map(dep => (
+                          <div 
+                            key={dep} 
+                            style={{
+                              fontSize: '12px',
+                              backgroundColor: '#374151',
+                              padding: '4px 8px',
+                              borderRadius: '4px',
+                              display: 'inline-block',
+                              marginRight: '4px',
+                              marginBottom: '4px'
+                            }}
+                          >
+                            {dep}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+            
+            {/* Tooltip Arrow */}
+            <div style={{
+              position: 'absolute',
+              top: '100%',
+              left: '16px',
+              width: 0,
+              height: 0,
+              borderLeft: '8px solid transparent',
+              borderRight: '8px solid transparent',
+              borderTop: '8px solid #1f2937'
+            }} />
+          </div>
+        )}
+      </div>
+    </>
   );
-});
-
-// Web worker code for force simulation
-// This would be in a separate file: forceSimulation.worker.ts
-/*
-self.onmessage = (event) => {
-  const { type, data } = event.data;
-  
-  if (type === 'start') {
-    const { nodes, links, width, height } = data;
-    
-    // Import D3 force modules
-    importScripts('https://d3js.org/d3.v7.min.js');
-    
-    // Create force simulation
-    const simulation = d3.forceSimulation(nodes)
-      .force("link", d3.forceLink(links).id(d => d.id).distance(50))
-      .force("charge", d3.forceManyBody().strength(-100))
-      .force("center", d3.forceCenter(width / 2, height / 2))
-      .force("collide", d3.forceCollide(10))
-      .alphaDecay(0.01) // Slower decay for more stable positioning
-      .alpha(0.3)
-      .alphaMin(0.001);
-    
-    // Send updates periodically rather than every tick
-    let tickCounter = 0;
-    
-    simulation.on('tick', () => {
-      tickCounter++;
-      
-      // Only send updates every few ticks to reduce message overhead
-      if (tickCounter % 5 === 0) {
-        const positions = nodes.map(node => ({
-          id: node.id,
-          x: node.x,
-          y: node.y
-        }));
-        
-        self.postMessage({
-          type: 'tick',
-          data: { positions }
-        });
-      }
-    });
-    
-    simulation.on('end', () => {
-      // Send final positions
-      const positions = nodes.map(node => ({
-        id: node.id,
-        x: node.x,
-        y: node.y
-      }));
-      
-      self.postMessage({
-        type: 'end',
-        data: { positions }
-      });
-    });
-  }
 };
-*/
 
-export default GraphOnly;
+export default JobGanttChart;
