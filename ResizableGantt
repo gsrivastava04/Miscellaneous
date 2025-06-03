@@ -1,0 +1,821 @@
+import React, { useState, useMemo } from 'react';
+
+// Icon components
+const ChevronDown = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M19 9l-7 7-7-7" />
+  </svg>
+);
+
+const ChevronRight = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 5l7 7-7 7" />
+  </svg>
+);
+
+const Folder = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M3 7v10a2 2 0 002 2h14a2 2 0 002-2V9a2 2 0 00-2-2h-6l-2-2H5a2 2 0 00-2 2z" />
+  </svg>
+);
+
+const FolderOpen = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M5 19a2 2 0 01-2-2V7a2 2 0 012-2h4l2 2h4a2 2 0 012 2v1M5 19h14a2 2 0 002-2v-5a2 2 0 00-2-2H9a2 2 0 00-2 2v5a2 2 0 01-2 2z" />
+  </svg>
+);
+
+const CheckCircle = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M9 12l2 2 4-4m6 2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const XCircle = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const Play = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M14.828 14.828a4 4 0 01-5.656 0M9 10h1.586a1 1 0 01.707.293l2.414 2.414a1 1 0 00.707.293H15M13 16h3a2 2 0 002-2V9a2 2 0 00-2-2h-3" />
+  </svg>
+);
+
+const Pause = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z" />
+  </svg>
+);
+
+const X = ({ className, ...props }) => (
+  <svg className={className} {...props} fill="none" viewBox="0 0 24 24" stroke="currentColor">
+    <path strokeLinecap="round" strokeLinejoin="round" strokeWidth={2} d="M6 18L18 6M6 6l12 12" />
+  </svg>
+);
+
+const JobGanttChart = () => {
+  const [isOpen, setIsOpen] = useState(false);
+  const [collapsedTasks, setCollapsedTasks] = useState(new Set());
+  const [hoveredJob, setHoveredJob] = useState(null);
+  const [tooltipPosition, setTooltipPosition] = useState({ x: 0, y: 0 });
+  const [columnWidth, setColumnWidth] = useState(400);
+  const [isResizing, setIsResizing] = useState(false);
+  
+  // Parse date strings with timezone handling
+  const parseDate = (dateString) => {
+    if (!dateString) return null;
+    
+    if (typeof dateString === 'string') {
+      if (dateString.includes('+') || dateString.includes('-')) {
+        let cleanDate = dateString.replace(/(\d{4})\/(\d{2})\/(\d{2})/, '$1-$2-$3');
+        return new Date(cleanDate);
+      }
+      
+      let cleanDate = dateString.replace(/\.\d{3}/, '');
+      cleanDate = cleanDate.replace(/(\d{4})\/(\d{2})\/(\d{2})/, '$1-$2-$3');
+      return new Date(cleanDate);
+    }
+    
+    return new Date(dateString);
+  };
+
+  // Sample job data representing a data processing pipeline
+  const jobData = {
+    "jobs": [
+      {"id": "JOB_001", "name": "Daily_Data_Extract", "startdate": "2025/05/28 06:00:00.000 +0000", "enddate": "2025/05/28 16:15:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
+      
+      {"id": "NEWJ_001", "name": "Data_Processing_Pipeline", "startdate": null, "enddate": null, "status": "RUNNING", "progress": 0, "dependency": [], "parent": null},
+      
+      {"id": "NEWJ_001_VALIDATION", "name": "Data_Validation_Phase", "startdate": "2025/05/28 09:00:00.000 +0000", "enddate": "2025/05/28 12:00:00.000 +0000", "status": "SUCCESS", "progress": 0, "dependency": [], "parent": "JOB_001"},
+      {"id": "NEWJ_001_TRANSFORM", "name": "Data_Transformation_Phase", "startdate": "2025/05/28 08:00:00.000 +0000", "enddate": "2025/05/28 10:30:00.000 +0000", "status": "RUNNING", "progress": 0, "dependency": [], "parent": "JOB_001"},
+      {"id": "NEWJ_001_OUTPUT", "name": "Output_Generation_Phase", "startdate": "2025/05/28 09:10:00.000 +0000", "enddate": "2025/05/28 09:50:00.000 +0000", "status": "WAITING", "progress": 0, "dependency": [], "parent": "JOB_001"},
+      
+      {"id": "JOB_002", "name": "Customer_Data_Validation", "startdate": "2025/05/28 09:10:00.000 +0000", "enddate": "2025/05/28 09:25:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_001"], "parent": "NEWJ_001_VALIDATION"},
+      {"id": "JOB_003", "name": "Financial_Data_Validation", "startdate": "2025/05/28 10:15:00.000 +0000", "enddate": "2025/05/28 11:30:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_001"], "parent": "NEWJ_001_VALIDATION"},
+      
+      {"id": "NEWJ_CUSTOMER_SUBTASKS", "name": "Customer_Validation_Subtasks", "startdate": null, "enddate": null, "status": "SUCCESS", "progress": 0, "dependency": [], "parent": "JOB_002"},
+      {"id": "JOB_002_A", "name": "Email_Format_Check", "startdate": "2025/05/28 06:15:00.000 +0000", "enddate": "2025/05/28 06:18:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": "NEWJ_CUSTOMER_SUBTASKS"},
+      {"id": "JOB_002_B", "name": "Phone_Number_Validation", "startdate": "2025/05/28 06:18:00.000 +0000", "enddate": "2025/05/28 06:22:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002_A"], "parent": "NEWJ_CUSTOMER_SUBTASKS"},
+      {"id": "JOB_002_C", "name": "Address_Standardization", "startdate": "2025/05/28 06:22:00.000 +0000", "enddate": "2025/05/28 06:25:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002_B"], "parent": "NEWJ_CUSTOMER_SUBTASKS"},
+      
+      {"id": "JOB_004", "name": "Data_Transformation", "startdate": "2025/05/28 06:30:00.000 +0000", "enddate": "2025/05/28 07:00:00.000 +0000", "status": "RUNNING", "progress": 65, "dependency": ["JOB_002", "JOB_003"], "parent": "NEWJ_001_TRANSFORM"},
+      {"id": "JOB_004_CLEAN", "name": "Data_Cleaning", "startdate": "2025/05/28 06:30:00.000 +0000", "enddate": "2025/05/28 06:45:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_002", "JOB_003"], "parent": "NEWJ_001_TRANSFORM"},
+      
+      {"id": "JOB_005", "name": "Report_Generation", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_004"], "parent": "NEWJ_001_OUTPUT"},
+      {"id": "JOB_006", "name": "Email_Notification", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_005"], "parent": "NEWJ_001_OUTPUT"},
+      
+      {"id": "JOB_007", "name": "Database_Backup", "startdate": "2025/05/28 02:00:00.000 +0000", "enddate": "2025/05/28 12:00:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": [], "parent": null},
+      {"id": "JOB_008", "name": "Log_Cleanup", "startdate": "2025/05/28 03:00:00.000 +0000", "enddate": "2025/05/28 03:05:00.000 +0000", "status": "SUCCESS", "progress": 100, "dependency": ["JOB_007"], "parent": null},
+      
+      {"id": "NEWJ_002", "name": "System_Monitoring_Suite", "startdate": null, "enddate": null, "status": "FAILED", "progress": 0, "dependency": [], "parent": null},
+      {"id": "JOB_009", "name": "System_Health_Check", "startdate": "2025/05/28 04:00:00.000 +0000", "enddate": null, "status": "FAILED", "progress": 80, "dependency": [], "parent": "NEWJ_002"},
+      {"id": "JOB_010", "name": "Alert_Generation", "startdate": null, "enddate": null, "status": "WAITING", "progress": 0, "dependency": ["JOB_009"], "parent": "NEWJ_002"},
+      
+      {"id": "JOB_016", "name": "Very_Long_Job_Name_That_Demonstrates_Layout", "startdate": "2025/05/28 08:00:00.000 +0000", "enddate": "2025/05/28 08:30:00.000 +0000", "status": "RUNNING", "progress": 45, "dependency": ["JOB_004"], "parent": null}
+    ]
+  };
+
+  // Build hierarchical structure from flat job list
+  const buildHierarchy = (jobs) => {
+    const jobMap = new Map();
+    const rootJobs = [];
+    
+    // Create job objects with processed data
+    jobs.forEach(job => {
+      const processedJob = {
+        ...job,
+        name: job.name.replace(/_/g, ' '),
+        startdate: parseDate(job.startdate),
+        enddate: parseDate(job.enddate),
+        children: [],
+        level: 0
+      };
+      
+      jobMap.set(job.id, processedJob);
+    });
+    
+    // Build parent-child relationships
+    jobMap.forEach(job => {
+      if (job.parent) {
+        const parent = jobMap.get(job.parent);
+        if (parent) {
+          parent.children.push(job);
+          job.level = parent.level + 1;
+        }
+      } else {
+        rootJobs.push(job);
+      }
+    });
+    
+    // Sort children by start date
+    const sortChildrenByStartDate = (jobList) => {
+      jobList.forEach(job => {
+        if (job.children.length > 0) {
+          job.children.sort((a, b) => {
+            if (!a.startdate && !b.startdate) return 0;
+            if (!a.startdate) return 1;
+            if (!b.startdate) return -1;
+            return a.startdate.getTime() - b.startdate.getTime();
+          });
+          sortChildrenByStartDate(job.children);
+        }
+      });
+    };
+    
+    // Calculate container properties for parent jobs
+    const calculateContainerProperties = (job) => {
+      if (job.children.length === 0) return;
+      
+      job.children.forEach(child => {
+        if (child.children.length > 0) {
+          calculateContainerProperties(child);
+        }
+      });
+      
+      const childDates = job.children
+        .filter(child => child.startdate)
+        .map(child => ({ start: child.startdate, end: child.enddate }));
+      
+      if (childDates.length > 0) {
+        job.startdate = new Date(Math.min(...childDates.map(d => d.start.getTime())));
+        const endDates = childDates.filter(d => d.end).map(d => d.end.getTime());
+        if (endDates.length > 0) {
+          job.enddate = new Date(Math.max(...endDates));
+        }
+      }
+      
+      // Calculate average progress
+      if (job.children.length > 0) {
+        const totalProgress = job.children.reduce((sum, child) => sum + child.progress, 0);
+        job.progress = Math.round(totalProgress / job.children.length);
+      }
+      
+      // Determine status based on children
+      if (job.children.length > 0) {
+        if (job.children.every(child => child.status === 'SUCCESS')) {
+          job.status = 'SUCCESS';
+        } else if (job.children.some(child => child.status === 'FAILED')) {
+          job.status = 'FAILED';
+        } else if (job.children.some(child => child.status === 'RUNNING')) {
+          job.status = 'RUNNING';
+        } else if (job.children.some(child => child.status === 'WAITING')) {
+          job.status = 'WAITING';
+        }
+      }
+    };
+    
+    const calculateAllContainerProperties = (jobList) => {
+      jobList.forEach(job => {
+        calculateContainerProperties(job);
+        if (job.children.length > 0) {
+          calculateAllContainerProperties(job.children);
+        }
+      });
+    };
+    
+    calculateAllContainerProperties(rootJobs);
+    sortChildrenByStartDate(rootJobs);
+    
+    return rootJobs.sort((a, b) => {
+      if (!a.startdate && !b.startdate) return 0;
+      if (!a.startdate) return 1;
+      if (!b.startdate) return -1;
+      return a.startdate.getTime() - b.startdate.getTime();
+    });
+  };
+
+  const [jobs] = useState(buildHierarchy(jobData.jobs));
+
+  // Generate 30-hour timeline
+  const timelineRange = useMemo(() => {
+    const dates = [];
+    let earliestDate = null;
+    
+    const findEarliestDate = (jobList) => {
+      jobList.forEach(job => {
+        if (job.startdate) {
+          const startDate = parseDate(job.startdate);
+          if (startDate && (!earliestDate || startDate < earliestDate)) {
+            earliestDate = startDate;
+          }
+        }
+        if (job.children && job.children.length > 0) {
+          findEarliestDate(job.children);
+        }
+      });
+    };
+    
+    findEarliestDate(jobData.jobs.map(job => ({
+      ...job,
+      startdate: job.startdate
+    })));
+    
+    if (!earliestDate) {
+      earliestDate = parseDate("2025/05/28 02:00:00.000 +0000");
+    }
+    
+    const timelineStart = new Date(earliestDate.getTime() - (60 * 60 * 1000));
+    
+    for (let hour = 0; hour < 30; hour++) {
+      const time = new Date(timelineStart.getTime() + (hour * 60 * 60 * 1000));
+      dates.push(time);
+    }
+    
+    return dates;
+  }, []);
+
+  // Status color mapping
+  const getStatusColor = (status) => {
+    switch (status) {
+      case 'SUCCESS': return '#10B981';
+      case 'RUNNING': return '#F59E0B';
+      case 'FAILED': return '#EF4444';
+      case 'WAITING': return '#6B7280';
+      default: return '#6B7280';
+    }
+  };
+
+  // Status icon mapping
+  const getStatusIcon = (status) => {
+    switch (status) {
+      case 'SUCCESS': return CheckCircle;
+      case 'RUNNING': return Play;
+      case 'FAILED': return XCircle;
+      case 'WAITING': return Pause;
+      default: return CheckCircle;
+    }
+  };
+
+  // Flatten hierarchical jobs for rendering
+  const flattenJobs = (jobs, level = 0) => {
+    let result = [];
+    
+    for (const job of jobs) {
+      result.push({ ...job, level });
+      
+      if (job.children && job.children.length > 0 && !collapsedTasks.has(job.id)) {
+        result = result.concat(flattenJobs(job.children, level + 1));
+      }
+    }
+    
+    return result;
+  };
+
+  const flatJobs = useMemo(() => flattenJobs(jobs), [jobs, collapsedTasks]);
+
+  // Toggle expand/collapse for parent jobs
+  const toggleJobCollapse = (jobId) => {
+    const newCollapsed = new Set(collapsedTasks);
+    if (newCollapsed.has(jobId)) {
+      newCollapsed.delete(jobId);
+    } else {
+      newCollapsed.add(jobId);
+    }
+    setCollapsedTasks(newCollapsed);
+  };
+
+  // Calculate position and width for Gantt bars
+  const getJobBarStyle = (job) => {
+    if (!job.startdate || timelineRange.length === 0) {
+      return { left: '1%', width: '2%' };
+    }
+    
+    const timelineStart = timelineRange[0];
+    const timelineEnd = timelineRange[timelineRange.length - 1];
+    const timelineDurationMs = timelineEnd.getTime() - timelineStart.getTime();
+    
+    const jobStartTime = new Date(job.startdate);
+    const jobEndTime = job.enddate ? new Date(job.enddate) : new Date(jobStartTime.getTime() + 15 * 60 * 1000);
+    
+    const jobStartOffset = jobStartTime.getTime() - timelineStart.getTime();
+    const jobDuration = jobEndTime.getTime() - jobStartTime.getTime();
+    
+    const left = Math.max(0, (jobStartOffset / timelineDurationMs) * 100);
+    const width = Math.max(0.5, (jobDuration / timelineDurationMs) * 100);
+    
+    return { 
+      left: `${left}%`, 
+      width: `${width}%` 
+    };
+  };
+
+  // Format time for display
+  const formatTime = (date) => {
+    if (!date) return 'Not scheduled';
+    
+    const dateObj = date instanceof Date ? date : parseDate(date);
+    if (!dateObj || isNaN(dateObj.getTime())) return 'Invalid date';
+    
+    return dateObj.toLocaleTimeString('en-US', { 
+      hour: '2-digit', 
+      minute: '2-digit',
+      hour12: false,
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    });
+  };
+
+  const formatDateTime = (date) => {
+    if (!date) return 'Not scheduled';
+    
+    const dateObj = date instanceof Date ? date : parseDate(date);
+    if (!dateObj || isNaN(dateObj.getTime())) return 'Invalid date';
+    
+    return dateObj.toLocaleDateString('en-US', {
+      month: 'short',
+      day: 'numeric',
+      year: 'numeric',
+      timeZone: Intl.DateTimeFormat().resolvedOptions().timeZone
+    }) + ' ' + formatTime(dateObj);
+  };
+
+  const formatDuration = (startDate, endDate) => {
+    if (!startDate || !endDate) return 'Unknown';
+    
+    const startObj = startDate instanceof Date ? startDate : parseDate(startDate);
+    const endObj = endDate instanceof Date ? endDate : parseDate(endDate);
+    
+    if (!startObj || !endObj || isNaN(startObj.getTime()) || isNaN(endObj.getTime())) {
+      return 'Unknown';
+    }
+    
+    const diffMs = endObj.getTime() - startObj.getTime();
+    const diffMinutes = Math.round(diffMs / (1000 * 60));
+    
+    if (diffMinutes < 60) {
+      return `${diffMinutes} min`;
+    } else {
+      const hours = Math.floor(diffMinutes / 60);
+      const minutes = diffMinutes % 60;
+      return `${hours}h ${minutes}m`;
+    }
+  };
+
+  const hasChildren = (job) => job.children && job.children.length > 0;
+
+  const getJobIcon = (job) => {
+    if (hasChildren(job)) {
+      return collapsedTasks.has(job.id) ? Folder : FolderOpen;
+    }
+    return getStatusIcon(job.status);
+  };
+
+  const handleJobBarHover = (job, event) => {
+    setHoveredJob(job);
+    setTooltipPosition({
+      x: event.clientX,
+      y: event.clientY
+    });
+  };
+
+  const handleJobBarLeave = () => {
+    setHoveredJob(null);
+  };
+
+  // Handle column resizing
+  const handleMouseDown = (e) => {
+    e.preventDefault();
+    setIsResizing(true);
+    
+    const startX = e.clientX;
+    const startWidth = columnWidth;
+    
+    const handleMouseMove = (e) => {
+      const deltaX = e.clientX - startX;
+      const newWidth = Math.max(200, Math.min(800, startWidth + deltaX));
+      setColumnWidth(newWidth);
+    };
+    
+    const handleMouseUp = () => {
+      setIsResizing(false);
+      document.removeEventListener('mousemove', handleMouseMove);
+      document.removeEventListener('mouseup', handleMouseUp);
+    };
+    
+    document.addEventListener('mousemove', handleMouseMove);
+    document.addEventListener('mouseup', handleMouseUp);
+  };
+
+  // Main render - show button if closed
+  if (!isOpen) {
+    return (
+      <div className="p-4">
+        <button
+          onClick={() => setIsOpen(true)}
+          className="px-6 py-3 bg-blue-600 hover:bg-blue-700 text-white rounded-lg font-medium transition-colors"
+        >
+          Open Enhanced Job Timeline
+        </button>
+      </div>
+    );
+  }
+
+  // Main modal interface
+  return (
+    <>
+      {/* Backdrop */}
+      <div 
+        className="fixed inset-0 bg-black bg-opacity-50 z-40"
+        onClick={() => setIsOpen(false)} 
+      />
+      
+      {/* Modal */}
+      <div className="fixed top-4 left-4 right-4 bottom-4 bg-white rounded-lg shadow-2xl z-50 flex flex-col">
+        {/* Header */}
+        <div className="flex items-center justify-between p-3 border-b border-gray-200 flex-shrink-0">
+          <h1 className="text-lg font-bold text-gray-900">
+            Enhanced Job Timeline (30 Hours)
+          </h1>
+          <button
+            onClick={() => setIsOpen(false)}
+            className="p-1 rounded hover:bg-gray-100 transition-colors"
+          >
+            <X className="w-5 h-5 text-gray-500" />
+          </button>
+        </div>
+
+        {/* Main content */}
+        <div className="flex-1 overflow-hidden flex flex-col">
+          <div className="flex-1 border border-gray-200 m-6 mt-6 rounded-lg overflow-hidden flex flex-col">
+            {/* Timeline header */}
+            <div className="bg-gray-50 border-b border-gray-200 flex-shrink-0 overflow-x-hidden">
+              <div className="flex" style={{ minWidth: `${columnWidth + 30 * 60}px` }}>
+                <div 
+                  className="p-3 font-semibold text-gray-700 border-r border-gray-200 overflow-hidden flex items-center flex-shrink-0 relative"
+                  style={{ width: `${columnWidth}px` }}
+                >
+                  <span className="whitespace-nowrap overflow-hidden text-ellipsis w-full">
+                    Job / Batch Hierarchy (Local Time)
+                  </span>
+                  
+                  {/* Resize handle */}
+                  <div
+                    className={`absolute right-0 top-0 h-full w-1 cursor-col-resize hover:bg-blue-500 transition-colors ${
+                      isResizing ? 'bg-blue-500' : 'bg-transparent hover:bg-blue-300'
+                    }`}
+                    onMouseDown={handleMouseDown}
+                    style={{ marginRight: '-2px' }}
+                  >
+                    <div className="absolute right-0 top-1/2 transform -translate-y-1/2 w-1 h-8 bg-gray-400 opacity-50 hover:opacity-100 transition-opacity" />
+                  </div>
+                </div>
+                
+                <div className="flex-shrink-0" style={{ width: `${30 * 60}px` }}>
+                  <div className="flex w-full">
+                    {timelineRange.map((time, index) => (
+                      <div 
+                        key={index}
+                        className="p-1.5 text-xs text-center border-r border-gray-200 text-gray-500 w-15 flex-shrink-0 flex flex-col items-center"
+                      >
+                        <div className="font-medium">
+                          {time.getHours().toString().padStart(2, '0')}:00
+                        </div>
+                        {index === 0 || time.getHours() === 0 ? (
+                          <div className="text-xs text-gray-400 mt-0.5">
+                            {time.getDate()}/{time.getMonth() + 1}
+                          </div>
+                        ) : null}
+                      </div>
+                    ))}
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Job rows */}
+            <div 
+              className="flex-1 overflow-auto"
+              onScroll={(e) => {
+                const header = e.target.previousElementSibling;
+                if (header) {
+                  header.scrollLeft = e.target.scrollLeft;
+                }
+              }}
+            >
+              <div style={{ minWidth: `${columnWidth + 30 * 60}px`, height: 'fit-content' }}>
+                {flatJobs.map((job, index) => {
+                  const JobIcon = getJobIcon(job);
+                  const statusColor = getStatusColor(job.status);
+                  
+                  return (
+                    <div 
+                      key={`${job.id}-${job.level}`}
+                      className="flex border-b border-gray-200 hover:bg-gray-50 transition-colors"
+                      style={{ minWidth: `${columnWidth + 30 * 60}px` }}
+                    >
+                      {/* Job name column */}
+                      <div 
+                        className="p-3 border-r border-gray-200 flex-shrink-0 overflow-hidden relative"
+                        style={{ width: `${columnWidth}px` }}
+                      >
+                        <div 
+                          className="flex items-center w-full"
+                          style={{ paddingLeft: `${job.level * 16}px` }}
+                        >
+                          {hasChildren(job) && (
+                            <button
+                              onClick={() => toggleJobCollapse(job.id)}
+                              className="mr-1.5 p-0.5 rounded hover:bg-gray-200 flex-shrink-0"
+                            >
+                              {collapsedTasks.has(job.id) ? (
+                                <ChevronRight className="w-3 h-3" />
+                              ) : (
+                                <ChevronDown className="w-3 h-3" />
+                              )}
+                            </button>
+                          )}
+                          
+                          <JobIcon 
+                            className="w-3.5 h-3.5 mr-1.5 flex-shrink-0"
+                            style={{ color: statusColor }}
+                          />
+                          
+                          <div 
+                            className={`${
+                              job.level === 0 ? 'font-semibold' : hasChildren(job) ? 'font-medium' : 'font-normal'
+                            } ${
+                              hasChildren(job) ? 'text-gray-900' : 'text-gray-700'
+                            } ${
+                              job.level === 0 ? 'text-sm' : 'text-xs'
+                            } whitespace-nowrap cursor-pointer overflow-hidden text-ellipsis flex-1 min-w-0`}
+                            title={`${job.name} (Level ${job.level})`}
+                            onMouseEnter={(e) => {
+                              setHoveredJob({...job, isNameTooltip: true});
+                              setTooltipPosition({
+                                x: e.clientX,
+                                y: e.clientY
+                              });
+                            }}
+                            onMouseLeave={() => {
+                              if (hoveredJob?.isNameTooltip) {
+                                setHoveredJob(null);
+                              }
+                            }}
+                            onMouseMove={(e) => {
+                              if (hoveredJob?.isNameTooltip) {
+                                setTooltipPosition({
+                                  x: e.clientX,
+                                  y: e.clientY
+                                });
+                              }
+                            }}
+                          >
+                            {job.name}
+                          </div>
+                        </div>
+                        
+                        {/* Resize handle for each row */}
+                        <div
+                          className={`absolute right-0 top-0 h-full w-1 cursor-col-resize ${
+                            isResizing ? 'bg-blue-500' : 'hover:bg-blue-300'
+                          } transition-colors`}
+                          onMouseDown={handleMouseDown}
+                          style={{ marginRight: '-2px' }}
+                        />
+                      </div>
+
+                      {/* Timeline column */}
+                      <div className="flex-shrink-0 relative h-13 p-2" style={{ width: `${30 * 60}px` }}>
+                        <div className="relative h-full w-full">
+                          <div 
+                            className="absolute top-1/2 transform -translate-y-1/2 rounded-md shadow-sm flex items-center cursor-pointer"
+                            style={{
+                              ...getJobBarStyle(job),
+                              backgroundColor: statusColor,
+                              height: job.level === 0 ? '24px' : hasChildren(job) ? '20px' : '16px',
+                              opacity: job.level === 0 ? 1 : hasChildren(job) ? 0.9 : 0.8,
+                              border: job.level > 3 ? '1px solid rgba(255,255,255,0.3)' : 'none'
+                            }}
+                            onMouseEnter={(e) => {
+                              if (!hoveredJob?.isNameTooltip) {
+                                handleJobBarHover(job, e);
+                              }
+                            }}
+                            onMouseLeave={() => {
+                              if (!hoveredJob?.isNameTooltip) {
+                                handleJobBarLeave();
+                              }
+                            }}
+                            onMouseMove={(e) => {
+                              if (hoveredJob?.id === job.id && !hoveredJob?.isNameTooltip) {
+                                setTooltipPosition({
+                                  x: e.clientX,
+                                  y: e.clientY
+                                });
+                              }
+                            }}
+                          >
+                            {job.progress > 0 && job.progress < 100 && (
+                              <div 
+                                className="h-full rounded-md bg-white bg-opacity-30"
+                                style={{ width: `${job.progress}%` }}
+                              />
+                            )}
+                            
+                            {(job.level === 0 || (hasChildren(job) && job.level <= 1)) && (
+                              <div 
+                                className={`${
+                                  job.level === 0 ? 'text-xs' : 'text-xs'
+                                } font-medium text-white px-1.5 pointer-events-none overflow-hidden text-ellipsis whitespace-nowrap w-full`}
+                              >
+                                {job.startdate ? job.name : 'No Schedule'}
+                              </div>
+                            )}
+                          </div>
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
+          
+          {/* Footer statistics */}
+          <div className="p-6 border-t border-gray-200 flex-shrink-0">
+            <div className="flex justify-center gap-8 mb-4 text-sm text-gray-600">
+              <div>
+                <strong>{flatJobs.length}</strong> total items
+              </div>
+              <div>
+                <strong>{Math.max(...flatJobs.map(j => j.level)) + 1}</strong> max depth
+              </div>
+              <div>
+                <strong>{flatJobs.filter(j => j.children && j.children.length > 0).length}</strong> containers
+              </div>
+              <div>
+                <strong>{flatJobs.filter(j => !j.children || j.children.length === 0).length}</strong> jobs
+              </div>
+            </div>
+            
+            {/* Legend */}
+            <div className="flex flex-wrap gap-6 text-sm justify-center">
+              <div className="flex items-center">
+                <CheckCircle className="w-4 h-4 mr-2 text-green-500" />
+                <span className="text-gray-600">Success</span>
+              </div>
+              <div className="flex items-center">
+                <Play className="w-4 h-4 mr-2 text-amber-500" />
+                <span className="text-gray-600">Running</span>
+              </div>
+              <div className="flex items-center">
+                <XCircle className="w-4 h-4 mr-2 text-red-500" />
+                <span className="text-gray-600">Failed</span>
+              </div>
+              <div className="flex items-center">
+                <Pause className="w-4 h-4 mr-2 text-gray-500" />
+                <span className="text-gray-600">Waiting</span>
+              </div>
+              <div className="flex items-center">
+                <Folder className="w-4 h-4 mr-2 text-blue-500" />
+                <span className="text-gray-600">Has Children</span>
+              </div>
+            </div>
+          </div>
+        </div>
+
+        {/* Tooltip */}
+        {hoveredJob && (
+          <div 
+            className="fixed z-60 bg-gray-800 text-white p-4 rounded-lg shadow-2xl max-w-80 pointer-events-none"
+            style={{
+              left: `${tooltipPosition.x + 10}px`,
+              top: `${tooltipPosition.y - 10}px`,
+              transform: 'translateY(-100%)'
+            }}
+          >
+            {hoveredJob.isNameTooltip ? (
+              <div className="text-sm">
+                <div className="font-semibold mb-1">
+                  {hoveredJob.name.replace(/_/g, ' ')}
+                </div>
+                <div className="text-xs text-gray-300">
+                  Level {hoveredJob.level} • {hasChildren(hoveredJob) ? 'Parent' : 'Job'}
+                </div>
+              </div>
+            ) : (
+              <>
+                <div className="font-semibold text-base mb-2">
+                  {hoveredJob.name}
+                </div>
+                
+                <div className="flex flex-col gap-1.5 text-xs">
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Type:</span>
+                    <span className="font-medium">
+                      {hasChildren(hoveredJob) ? 'Parent' : 'Job'}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Level:</span>
+                    <span className="font-medium">{hoveredJob.level}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Status:</span>
+                    <span 
+                      className="font-semibold"
+                      style={{ color: getStatusColor(hoveredJob.status) }}
+                    >
+                      {hoveredJob.status}
+                    </span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Start:</span>
+                    <span>{formatDateTime(hoveredJob.startdate)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">End:</span>
+                    <span>{formatDateTime(hoveredJob.enddate)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Duration:</span>
+                    <span>{formatDuration(hoveredJob.startdate, hoveredJob.enddate)}</span>
+                  </div>
+                  
+                  <div className="flex justify-between">
+                    <span className="text-gray-300">Progress:</span>
+                    <span className="font-semibold">{hoveredJob.progress}%</span>
+                  </div>
+                  
+                  {hoveredJob.children && hoveredJob.children.length > 0 && (
+                    <div className="flex justify-between">
+                      <span className="text-gray-300">Children:</span>
+                      <span className="font-medium">{hoveredJob.children.length}</span>
+                    </div>
+                  )}
+                  
+                  {hoveredJob.dependency && hoveredJob.dependency.length > 0 && (
+                    <div className="border-t border-gray-600 pt-2 mt-2">
+                      <span className="text-gray-300">Dependencies:</span>
+                      <div className="mt-1">
+                        {hoveredJob.dependency.map(dep => (
+                          <div 
+                            key={dep} 
+                            className="text-xs bg-gray-700 px-1.5 py-0.5 rounded inline-block mr-1 mb-1"
+                          >
+                            {dep}
+                          </div>
+                        ))}
+                      </div>
+                    </div>
+                  )}
+                </div>
+              </>
+            )}
+            
+            {/* Tooltip arrow */}
+            <div className="absolute top-full left-4 w-0 h-0 border-l-2 border-r-2 border-t-2 border-transparent border-t-gray-800" />
+          </div>
+        )}
+      </div>
+    </>
+  );
+};
+
+export default JobGanttChart;
