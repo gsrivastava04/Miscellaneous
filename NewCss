@@ -1,0 +1,656 @@
+/* JobGanttChart.css - Complete CSS File */
+
+.job-gantt-container {
+  padding: 16px;
+}
+
+.job-gantt-open-button {
+  padding: 12px 24px;
+  background-color: #2563eb;
+  color: white;
+  border: none;
+  border-radius: 8px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.job-gantt-open-button:hover {
+  background-color: #1d4ed8;
+}
+
+.job-gantt-backdrop {
+  position: fixed;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(0, 0, 0, 0.5);
+  z-index: 40;
+}
+
+.job-gantt-modal {
+  position: fixed;
+  top: 16px;
+  left: 16px;
+  right: 16px;
+  bottom: 16px;
+  background-color: white;
+  border-radius: 8px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  z-index: 50;
+  display: flex;
+  flex-direction: column;
+}
+
+.job-gantt-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 12px;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.job-gantt-header-title {
+  font-size: 18px;
+  font-weight: bold;
+  color: #111827;
+}
+
+.job-gantt-close-button {
+  padding: 4px;
+  border-radius: 4px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.job-gantt-close-button:hover {
+  background-color: #f3f4f6;
+}
+
+.job-gantt-main-content {
+  flex: 1;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.job-gantt-chart-container {
+  flex: 1;
+  border: 1px solid #e5e7eb;
+  margin: 24px;
+  margin-top: 24px;
+  border-radius: 8px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.job-gantt-timeline-header {
+  background-color: #f9fafb;
+  border-bottom: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  overflow-x: hidden;
+}
+
+.job-gantt-timeline-header-content {
+  display: flex;
+}
+
+.job-gantt-job-name-column {
+  padding: 12px;
+  font-weight: 600;
+  color: #374151;
+  border-right: 1px solid #e5e7eb;
+  overflow: hidden;
+  display: flex;
+  align-items: center;
+  flex-shrink: 0;
+  position: relative;
+}
+
+.job-gantt-job-name-text {
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  width: 100%;
+}
+
+.job-gantt-resize-handle {
+  position: absolute;
+  right: 0;
+  top: 0;
+  height: 100%;
+  width: 4px;
+  cursor: col-resize;
+  transition: background-color 0.2s;
+  margin-right: -2px;
+}
+
+.job-gantt-resize-handle:hover {
+  background-color: #dbeafe;
+}
+
+.job-gantt-resize-handle.resizing {
+  background-color: #3b82f6;
+}
+
+.job-gantt-resize-handle-inner {
+  position: absolute;
+  right: 0;
+  top: 50%;
+  transform: translateY(-50%);
+  width: 4px;
+  height: 32px;
+  background-color: #9ca3af;
+  opacity: 0.5;
+  transition: opacity 0.2s;
+}
+
+.job-gantt-resize-handle:hover .job-gantt-resize-handle-inner {
+  opacity: 1;
+}
+
+.job-gantt-resize-handle.resizing .job-gantt-resize-handle-inner {
+  opacity: 1;
+}
+
+.job-gantt-timeline-grid {
+  flex-shrink: 0;
+  display: flex;
+  width: 100%;
+}
+
+.job-gantt-time-cell {
+  padding: 6px;
+  font-size: 12px;
+  text-align: center;
+  border-right: 1px solid #e5e7eb;
+  color: #6b7280;
+  width: 60px;
+  flex-shrink: 0;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+}
+
+.job-gantt-time-cell-time {
+  font-weight: 500;
+}
+
+.job-gantt-time-cell-date {
+  font-size: 10px;
+  color: #9ca3af;
+  margin-top: 2px;
+}
+
+.job-gantt-job-rows-container {
+  flex: 1;
+  overflow: auto;
+}
+
+.job-gantt-job-row {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  transition: background-color 0.2s;
+}
+
+.job-gantt-job-row:hover {
+  background-color: #f9fafb;
+}
+
+.job-gantt-job-name-cell {
+  padding: 12px;
+  border-right: 1px solid #e5e7eb;
+  flex-shrink: 0;
+  overflow: hidden;
+  position: relative;
+}
+
+.job-gantt-job-name-content {
+  display: flex;
+  align-items: center;
+  width: 100%;
+}
+
+.job-gantt-expand-button {
+  margin-right: 6px;
+  padding: 2px;
+  border-radius: 2px;
+  border: none;
+  background-color: transparent;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  transition: background-color 0.2s;
+}
+
+.job-gantt-expand-button:hover {
+  background-color: #e5e7eb;
+}
+
+.job-gantt-job-icon {
+  width: 14px;
+  height: 14px;
+  margin-right: 6px;
+  flex-shrink: 0;
+}
+
+.job-gantt-job-name {
+  white-space: nowrap;
+  cursor: pointer;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  flex: 1;
+  min-width: 0;
+}
+
+.job-gantt-job-name.level-0 {
+  font-weight: 600;
+  color: #111827;
+  font-size: 14px;
+}
+
+.job-gantt-job-name.parent {
+  font-weight: 500;
+  color: #111827;
+  font-size: 12px;
+}
+
+.job-gantt-job-name.child {
+  font-weight: normal;
+  color: #374151;
+  font-size: 12px;
+}
+
+.job-gantt-timeline-cell {
+  flex-shrink: 0;
+  position: relative;
+  height: 52px;
+  padding: 8px;
+}
+
+.job-gantt-timeline-bar {
+  position: relative;
+  height: 100%;
+  width: 100%;
+}
+
+.job-gantt-job-bar {
+  position: absolute;
+  top: 50%;
+  transform: translateY(-50%);
+  border-radius: 6px;
+  box-shadow: 0 1px 3px 0 rgba(0, 0, 0, 0.1);
+  display: flex;
+  align-items: center;
+  cursor: pointer;
+}
+
+.job-gantt-job-bar.level-0 {
+  height: 24px;
+  opacity: 1;
+}
+
+.job-gantt-job-bar.parent {
+  height: 20px;
+  opacity: 0.9;
+}
+
+.job-gantt-job-bar.child {
+  height: 16px;
+  opacity: 0.8;
+}
+
+.job-gantt-job-bar.deep-level {
+  border: 1px solid rgba(255, 255, 255, 0.3);
+}
+
+.job-gantt-job-bar-progress {
+  height: 100%;
+  border-radius: 6px;
+  background-color: rgba(255, 255, 255, 0.3);
+}
+
+.job-gantt-job-bar-text {
+  font-weight: 500;
+  color: white;
+  padding: 0 6px;
+  pointer-events: none;
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  width: 100%;
+  font-size: 12px;
+}
+
+.job-gantt-footer {
+  padding: 24px;
+  border-top: 1px solid #e5e7eb;
+  flex-shrink: 0;
+}
+
+.job-gantt-footer-stats {
+  display: flex;
+  justify-content: center;
+  gap: 32px;
+  margin-bottom: 16px;
+  font-size: 14px;
+  color: #6b7280;
+}
+
+.job-gantt-legend {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 24px;
+  font-size: 14px;
+  justify-content: center;
+}
+
+.job-gantt-legend-item {
+  display: flex;
+  align-items: center;
+}
+
+.job-gantt-legend-icon {
+  width: 16px;
+  height: 16px;
+  margin-right: 8px;
+}
+
+.job-gantt-legend-text {
+  color: #6b7280;
+}
+
+.job-gantt-tooltip {
+  position: fixed;
+  z-index: 60;
+  background-color: #374151;
+  color: white;
+  padding: 16px;
+  border-radius: 8px;
+  box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.25);
+  max-width: 320px;
+  pointer-events: none;
+}
+
+.job-gantt-tooltip-title {
+  font-weight: 600;
+  font-size: 16px;
+  margin-bottom: 8px;
+}
+
+.job-gantt-tooltip-content {
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+}
+
+.job-gantt-tooltip-row {
+  display: flex;
+  justify-content: space-between;
+}
+
+.job-gantt-tooltip-label {
+  color: #d1d5db;
+}
+
+.job-gantt-tooltip-value {
+  font-weight: 500;
+}
+
+.job-gantt-tooltip-dependencies {
+  border-top: 1px solid #6b7280;
+  padding-top: 8px;
+  margin-top: 8px;
+}
+
+.job-gantt-tooltip-dependency-tag {
+  font-size: 10px;
+  background-color: #4b5563;
+  padding: 2px 6px;
+  border-radius: 4px;
+  display: inline-block;
+  margin-right: 4px;
+  margin-bottom: 4px;
+}
+
+.job-gantt-tooltip-arrow {
+  position: absolute;
+  top: 100%;
+  left: 16px;
+  width: 0;
+  height: 0;
+  border-left: 8px solid transparent;
+  border-right: 8px solid transparent;
+  border-top: 8px solid #374151;
+}
+
+/* Loading states */
+.job-gantt-loading-overlay {
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  bottom: 0;
+  background-color: rgba(255, 255, 255, 0.9);
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  z-index: 100;
+}
+
+.job-gantt-loading-spinner {
+  width: 40px;
+  height: 40px;
+  border: 4px solid #f3f4f6;
+  border-top: 4px solid #3b82f6;
+  border-radius: 50%;
+  animation: job-gantt-spin 1s linear infinite;
+  margin-bottom: 16px;
+}
+
+@keyframes job-gantt-spin {
+  0% { transform: rotate(0deg); }
+  100% { transform: rotate(360deg); }
+}
+
+.job-gantt-loading-text {
+  color: #6b7280;
+  font-size: 14px;
+  font-weight: 500;
+}
+
+.job-gantt-loading-progress {
+  width: 200px;
+  height: 8px;
+  background-color: #f3f4f6;
+  border-radius: 4px;
+  overflow: hidden;
+  margin-top: 12px;
+}
+
+.job-gantt-loading-progress-bar {
+  height: 100%;
+  background-color: #3b82f6;
+  border-radius: 4px;
+  transition: width 0.3s ease;
+}
+
+.job-gantt-skeleton {
+  background: linear-gradient(90deg, #f0f0f0 25%, #e0e0e0 50%, #f0f0f0 75%);
+  background-size: 200% 100%;
+  animation: job-gantt-skeleton-loading 1.5s infinite;
+}
+
+@keyframes job-gantt-skeleton-loading {
+  0% {
+    background-position: 200% 0;
+  }
+  100% {
+    background-position: -200% 0;
+  }
+}
+
+.job-gantt-skeleton-row {
+  display: flex;
+  border-bottom: 1px solid #e5e7eb;
+  padding: 12px;
+}
+
+.job-gantt-skeleton-name {
+  width: 60%;
+  height: 20px;
+  border-radius: 4px;
+  margin-right: 12px;
+}
+
+.job-gantt-skeleton-bar {
+  width: 40%;
+  height: 16px;
+  border-radius: 4px;
+}
+
+.job-gantt-error-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.job-gantt-error-icon {
+  width: 48px;
+  height: 48px;
+  color: #ef4444;
+  margin-bottom: 16px;
+}
+
+.job-gantt-error-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.job-gantt-error-message {
+  font-size: 14px;
+  color: #6b7280;
+  margin-bottom: 24px;
+  max-width: 400px;
+}
+
+.job-gantt-retry-button {
+  padding: 8px 16px;
+  background-color: #3b82f6;
+  color: white;
+  border: none;
+  border-radius: 6px;
+  font-size: 14px;
+  font-weight: 500;
+  cursor: pointer;
+  transition: background-color 0.2s;
+}
+
+.job-gantt-retry-button:hover {
+  background-color: #2563eb;
+}
+
+.job-gantt-empty-state {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  justify-content: center;
+  padding: 48px 24px;
+  text-align: center;
+}
+
+.job-gantt-empty-icon {
+  width: 64px;
+  height: 64px;
+  color: #9ca3af;
+  margin-bottom: 16px;
+}
+
+.job-gantt-empty-title {
+  font-size: 18px;
+  font-weight: 600;
+  color: #111827;
+  margin-bottom: 8px;
+}
+
+.job-gantt-empty-message {
+  font-size: 14px;
+  color: #6b7280;
+  max-width: 400px;
+}
+
+/* Job bar loading state */
+.job-gantt-job-bar.loading {
+  background: linear-gradient(90deg, #e5e7eb 25%, #d1d5db 50%, #e5e7eb 75%);
+  background-size: 200% 100%;
+  animation: job-gantt-skeleton-loading 1.5s infinite;
+}
+
+/* Status color utilities */
+.status-success {
+  color: #10b981;
+}
+
+.status-running {
+  color: #f59e0b;
+}
+
+.status-failed {
+  color: #ef4444;
+}
+
+.status-waiting {
+  color: #6b7280;
+}
+
+.status-on-ice {
+  color: #06b6d4;
+}
+
+.status-terminated {
+  color: #dc2626;
+}
+
+.status-not-started {
+  color: #9ca3af;
+}
+
+.bg-status-success {
+  background-color: #10b981;
+}
+
+.bg-status-running {
+  background-color: #f59e0b;
+}
+
+.bg-status-failed {
+  background-color: #ef4444;
+}
+
+.bg-status-waiting {
+  background-color: #6b7280;
+}
+
+.bg-status-on-ice {
+  background-color: #06b6d4;
+}
+
+.bg-status-terminated {
+  background-color: #dc2626;
+}
+
+.bg-status-not-started {
+  background-color: #9ca3af;
+}
